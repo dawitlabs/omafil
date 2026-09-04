@@ -6,6 +6,7 @@ mod paths;
 mod recent;
 mod search;
 mod store;
+mod watcher;
 
 use crate::drives::{read_drives, DriveInfo};
 use crate::error::{DirectoryError, DriveError, RecentFilesError};
@@ -18,6 +19,8 @@ use crate::paths::{known_directory_path, resolve_navigable_path};
 use crate::recent::{read_recent_files, RecentFile};
 use crate::search::{search_directory, SearchResults};
 use crate::store::{read_state, write_state, AppState, StoreError};
+use crate::watcher::DirectoryWatcher;
+use tauri::{Emitter, Manager, State};
 
 #[tauri::command]
 async fn resolve_location(location: String) -> Result<String, DirectoryError> {
@@ -104,6 +107,22 @@ async fn search_files(
 }
 
 #[tauri::command]
+fn watch_directory(
+    path: String,
+    app: tauri::AppHandle,
+    watcher: State<'_, DirectoryWatcher>,
+) -> Result<(), DirectoryError> {
+    watcher.watch(&path, move |changed| {
+        let _ = app.emit("directory-changed", changed);
+    })
+}
+
+#[tauri::command]
+fn unwatch_directory(watcher: State<'_, DirectoryWatcher>) {
+    watcher.stop();
+}
+
+#[tauri::command]
 async fn load_state() -> AppState {
     tauri::async_runtime::spawn_blocking(read_state)
         .await
@@ -135,6 +154,10 @@ async fn list_drives() -> Result<Vec<DriveInfo>, DriveError> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            app.manage(DirectoryWatcher::default());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             resolve_location,
             list_directory,
@@ -145,6 +168,8 @@ pub fn run() {
             transfer_paths,
             describe_path,
             search_files,
+            watch_directory,
+            unwatch_directory,
             load_state,
             save_state,
             list_recent_files,

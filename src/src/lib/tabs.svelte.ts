@@ -42,7 +42,11 @@ class Tabs {
   }
 
   select(index: number) {
-    if (index >= 0 && index < this.#tabs.length) this.activeIndex = index
+    if (index < 0 || index >= this.#tabs.length) return
+
+    this.activeIndex = index
+    // A background tab was not being watched, so its listing may be stale.
+    this.active.reload()
   }
 }
 
