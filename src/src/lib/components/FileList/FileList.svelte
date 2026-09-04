@@ -1,11 +1,12 @@
 <script lang="ts">
   import ChevronDownIcon from '@fluentui/svg-icons/icons/chevron_down_12_filled.svg?no-inline'
   import ChevronUpIcon from '@fluentui/svg-icons/icons/chevron_up_12_filled.svg?no-inline'
+  import CommandBar from '../CommandBar/CommandBar.svelte'
   import ContextMenu from '../ContextMenu/ContextMenu.svelte'
+  import FileRow from '../FileRow/FileRow.svelte'
   import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
-  import { fileIcon, folderIcon } from '../../fileIcons'
-  import { formatBytes, formatCount, formatModified, typeLabel } from '../../format'
   import { fileOperations } from '../../fileOperations.svelte'
+  import { formatCount } from '../../format'
   import { navigation } from '../../navigation.svelte'
   import type { DirectoryEntry, EntrySort } from '../../navigation.svelte'
 
@@ -15,8 +16,6 @@
   let activeIndex = $state(0)
   let band = $state<Band | null>(null)
   let menu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null)
-  let renameDraft = $state('')
-  let renameSource = $state<string | null>(null)
   let bandOrigin: { x: number; y: number } | null = null
 
   const entries = $derived(navigation.listing?.entries ?? [])
@@ -29,26 +28,6 @@
     { sort: 'size', label: 'Size', className: 'file-row__size' },
   ]
 
-  $effect(() => {
-    const path = fileOperations.renamingPath
-
-    if (!path) {
-      renameSource = null
-      return
-    }
-
-    const entry = entries.find((candidate) => candidate.path === path)
-
-    if (entry && renameSource !== path) {
-      renameSource = path
-      renameDraft = entry.name
-    }
-  })
-
-  function iconFor(entry: DirectoryEntry) {
-    return entry.entryType === 'directory' ? folderIcon : fileIcon(entry.name)
-  }
-
   function focusRow(index: number) {
     activeIndex = Math.max(0, Math.min(index, entries.length - 1))
     const row = list?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`)
@@ -56,7 +35,7 @@
     row?.scrollIntoView({ block: 'nearest' })
   }
 
-  function handleRowPointerDown(entry: DirectoryEntry, index: number, event: MouseEvent) {
+  function activateRow(entry: DirectoryEntry, index: number, event: MouseEvent) {
     activeIndex = index
 
     if (event.shiftKey) {
@@ -72,19 +51,8 @@
     if (!fileOperations.isSelected(entry.path)) fileOperations.selectOnly(entry.path)
   }
 
-  function beginRenaming(path: string) {
-    renameDraft = entries.find((entry) => entry.path === path)?.name ?? ''
-    fileOperations.startRenaming(path)
-  }
-
-  function commitRename(path: string) {
-    void fileOperations.rename(path, renameDraft)
-  }
-
   function openMenuForRow(entry: DirectoryEntry, index: number, event: MouseEvent) {
-    handleRowPointerDown(entry, index, event)
-
-    const selectedCount = fileOperations.selectedPaths.length
+    activateRow(entry, index, event)
 
     menu = {
       x: event.clientX,
@@ -95,7 +63,13 @@
         { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: () => fileOperations.cutSelection() },
         { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => fileOperations.copySelection() },
         { kind: 'separator' },
-        { kind: 'action', label: 'Rename', shortcut: 'F2', disabled: selectedCount !== 1, onSelect: () => beginRenaming(entry.path) },
+        {
+          kind: 'action',
+          label: 'Rename',
+          shortcut: 'F2',
+          disabled: fileOperations.selectedPaths.length !== 1,
+          onSelect: () => fileOperations.startRenaming(entry.path),
+        },
         { kind: 'action', label: 'Move to trash', shortcut: 'Del', onSelect: () => fileOperations.deleteSelection() },
       ],
     }
@@ -154,19 +128,25 @@
     list?.releasePointerCapture(event.pointerId)
   }
 
+  function moveSelection(index: number) {
+    focusRow(index)
+    const entry = entries[activeIndex]
+
+    if (entry) fileOperations.selectOnly(entry.path)
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (fileOperations.renamingPath) return
 
-    const isModified = event.ctrlKey || event.metaKey
     const entry = entries[activeIndex]
 
-    if (isModified && event.shiftKey && event.key.toLowerCase() === 'n') {
+    if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'n') {
       event.preventDefault()
       void fileOperations.createFolder()
       return
     }
 
-    if (isModified) {
+    if (event.ctrlKey || event.metaKey) {
       const shortcuts: Record<string, () => void> = {
         a: () => fileOperations.selectAll(),
         c: () => fileOperations.copySelection(),
@@ -182,68 +162,37 @@
       return
     }
 
-    switch (event.key) {
-      case 'ArrowDown':
-        event.preventDefault()
-        focusRow(activeIndex + 1)
-        if (entries[activeIndex]) fileOperations.selectOnly(entries[activeIndex].path)
-        break
-      case 'ArrowUp':
-        event.preventDefault()
-        focusRow(activeIndex - 1)
-        if (entries[activeIndex]) fileOperations.selectOnly(entries[activeIndex].path)
-        break
-      case 'Home':
-        event.preventDefault()
-        focusRow(0)
-        if (entries[0]) fileOperations.selectOnly(entries[0].path)
-        break
-      case 'End':
-        event.preventDefault()
-        focusRow(entries.length - 1)
-        if (entries[activeIndex]) fileOperations.selectOnly(entries[activeIndex].path)
-        break
-      case 'Enter':
-        if (entry) void navigation.openEntry(entry)
-        break
-      case 'F2':
-        if (fileOperations.selectedPaths.length === 1) beginRenaming(fileOperations.selectedPaths[0])
-        break
-      case 'Delete':
-        void fileOperations.deleteSelection()
-        break
-      case 'Escape':
-        fileOperations.clearSelection()
-        break
+    const moves: Record<string, number> = {
+      ArrowDown: activeIndex + 1,
+      ArrowUp: activeIndex - 1,
+      Home: 0,
+      End: entries.length - 1,
     }
+
+    if (event.key in moves) {
+      event.preventDefault()
+      moveSelection(moves[event.key])
+      return
+    }
+
+    if (event.key === 'Enter' && entry) void navigation.openEntry(entry)
+    else if (event.key === 'F2') fileOperations.startRenaming()
+    else if (event.key === 'Delete') void fileOperations.deleteSelection()
+    else if (event.key === 'Escape') fileOperations.clearSelection()
   }
 
   function handleWindowKeydown(event: KeyboardEvent) {
-    if (event.altKey && event.key === 'ArrowLeft') navigation.back()
-    else if (event.altKey && event.key === 'ArrowRight') navigation.forward()
-    else if (event.altKey && event.key === 'ArrowUp') navigation.up()
+    if (!event.altKey) return
+
+    if (event.key === 'ArrowLeft') navigation.back()
+    else if (event.key === 'ArrowRight') navigation.forward()
+    else if (event.key === 'ArrowUp') navigation.up()
   }
 </script>
 
 <svelte:window onkeydown={handleWindowKeydown} />
 
-<div class="file-commands" role="toolbar" aria-label="File commands">
-  <button class="file-commands__button" type="button" onclick={() => fileOperations.createFolder()}>New folder</button>
-  <span class="file-commands__divider" aria-hidden="true"></span>
-  <button class="file-commands__button" type="button" disabled={fileOperations.selectedPaths.length === 0} onclick={() => fileOperations.cutSelection()}>Cut</button>
-  <button class="file-commands__button" type="button" disabled={fileOperations.selectedPaths.length === 0} onclick={() => fileOperations.copySelection()}>Copy</button>
-  <button class="file-commands__button" type="button" disabled={!fileOperations.canPaste} onclick={() => fileOperations.paste()}>Paste</button>
-  <span class="file-commands__divider" aria-hidden="true"></span>
-  <button
-    class="file-commands__button"
-    type="button"
-    disabled={fileOperations.selectedPaths.length !== 1}
-    onclick={() => beginRenaming(fileOperations.selectedPaths[0])}
-  >
-    Rename
-  </button>
-  <button class="file-commands__button" type="button" disabled={fileOperations.selectedPaths.length === 0} onclick={() => fileOperations.deleteSelection()}>Delete</button>
-</div>
+<CommandBar />
 
 {#if fileOperations.error}
   <div class="file-list__error" role="alert">
@@ -298,48 +247,14 @@
   }}
 >
   {#each entries as entry, index (entry.path)}
-    <div
-      class="file-row"
-      class:file-row--selected={fileOperations.isSelected(entry.path)}
-      class:file-row--cut={fileOperations.clipboardMode === 'cut' && fileOperations.clipboardPaths.includes(entry.path)}
-      data-path={entry.path}
-      data-index={index}
-      role="option"
-      aria-selected={fileOperations.isSelected(entry.path)}
-      tabindex={index === activeIndex ? 0 : -1}
-      onpointerdown={(event) => handleRowPointerDown(entry, index, event)}
-      ondblclick={() => navigation.openEntry(entry)}
-      oncontextmenu={(event) => {
-        event.preventDefault()
-        openMenuForRow(entry, index, event)
-      }}
-    >
-      <span class="masked-icon file-row__icon" style="--icon: url({iconFor(entry).icon}); color: {iconFor(entry).tone}" aria-hidden="true"></span>
-
-      {#if fileOperations.renamingPath === entry.path}
-        <!-- svelte-ignore a11y_autofocus -->
-        <input
-          class="file-row__rename"
-          type="text"
-          autofocus
-          bind:value={renameDraft}
-          onfocus={(event) => event.currentTarget.select()}
-          onclick={(event) => event.stopPropagation()}
-          onpointerdown={(event) => event.stopPropagation()}
-          onblur={() => commitRename(entry.path)}
-          onkeydown={(event) => {
-            if (event.key === 'Enter') commitRename(entry.path)
-            else if (event.key === 'Escape') fileOperations.cancelRenaming()
-          }}
-        />
-      {:else}
-        <span class="file-row__name">{entry.name}</span>
-      {/if}
-
-      <span class="file-row__modified">{formatModified(entry.modified)}</span>
-      <span class="file-row__kind">{typeLabel(entry.name, entry.entryType === 'directory')}</span>
-      <span class="file-row__size">{entry.entryType === 'directory' ? '' : formatBytes(entry.size)}</span>
-    </div>
+    <FileRow
+      {entry}
+      {index}
+      isActive={index === activeIndex}
+      onactivate={(event) => activateRow(entry, index, event)}
+      onopen={() => navigation.openEntry(entry)}
+      onmenu={(event) => openMenuForRow(entry, index, event)}
+    />
   {/each}
 
   {#if entries.length === 0}

@@ -31,6 +31,7 @@ class FileOperations {
   clipboardPaths = $state<string[]>([])
   clipboardMode = $state<ClipboardMode | null>(null)
   renamingPath = $state<string | null>(null)
+  renameDraft = $state('')
   error = $state<string | null>(null)
   isBusy = $state(false)
 
@@ -113,7 +114,10 @@ class FileOperations {
   }
 
   startRenaming(path: string = this.selectedPaths[0]) {
-    if (path) this.renamingPath = path
+    if (!path) return
+
+    this.renameDraft = this.entries.find((entry) => entry.path === path)?.name ?? ''
+    this.renamingPath = path
   }
 
   cancelRenaming() {
@@ -146,11 +150,12 @@ class FileOperations {
     await this.#run(async () => {
       const created = await invoke<string>('new_directory', { parentPath, name })
       this.selectOnly(created)
+      this.renameDraft = name
       this.renamingPath = created
     }, 'Unable to create that folder.')
   }
 
-  async rename(path: string, name: string) {
+  async rename(path: string, name: string = this.renameDraft) {
     this.renamingPath = null
 
     const entry = this.entries.find((candidate) => candidate.path === path)
