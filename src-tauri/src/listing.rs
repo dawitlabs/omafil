@@ -87,6 +87,13 @@ pub(crate) fn compare_entries(
         .then(if descending { by_key.reverse() } else { by_key })
 }
 
+impl DirectoryEntry {
+    #[cfg(test)]
+    pub(crate) fn path(&self) -> &str {
+        &self.path
+    }
+}
+
 pub(crate) fn describe_entry(directory_entry: &fs::DirEntry) -> Option<DirectoryEntry> {
     let file_type = directory_entry.file_type().ok()?;
     let metadata = directory_entry.metadata().ok();

@@ -17,7 +17,7 @@ use crate::listing::{
 use crate::operations::{create_directory, delete_entries, rename_entry, transfer_entries};
 use crate::paths::{known_directory_path, resolve_navigable_path};
 use crate::recent::{read_recent_files, RecentFile};
-use crate::search::{search_directory, SearchResults};
+use crate::search::{search_directory, SearchGeneration, SearchResults};
 use crate::store::{read_state, write_state, AppState, StoreError};
 use crate::watcher::DirectoryWatcher;
 use tauri::{Emitter, Manager, State};
@@ -100,8 +100,13 @@ async fn search_files(
     path: String,
     query: String,
     show_hidden: bool,
+    generation: State<'_, SearchGeneration>,
 ) -> Result<SearchResults, DirectoryError> {
-    tauri::async_runtime::spawn_blocking(move || search_directory(path, query, show_hidden))
+    let (current, id) = generation.begin();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        search_directory(path, query, show_hidden, id, current)
+    })
         .await
         .map_err(|_| DirectoryError::read_failed())?
 }
@@ -156,6 +161,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             app.manage(DirectoryWatcher::default());
+            app.manage(SearchGeneration::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
