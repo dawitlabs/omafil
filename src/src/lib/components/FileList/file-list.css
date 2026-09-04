@@ -1,0 +1,143 @@
+.file-commands {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.file-commands__button {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text-primary);
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.file-commands__button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.file-commands__button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.file-commands__button:disabled {
+  color: #b3b3b3;
+  cursor: default;
+}
+
+.file-commands__divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--border-subtle);
+}
+
+.file-list {
+  position: relative;
+  display: grid;
+  align-content: start;
+  min-height: 240px;
+  outline: 0;
+  user-select: none;
+}
+
+.file-row {
+  display: grid;
+  grid-template-columns: 20px minmax(120px, 1fr) minmax(0, 340px);
+  align-items: center;
+  gap: 12px;
+  height: 36px;
+  padding: 0 8px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: default;
+}
+
+.file-row:hover {
+  background: var(--surface-hover);
+}
+
+.file-row--selected {
+  color: var(--text-selected, var(--text-primary));
+  background: #e5f0fb;
+}
+
+.file-row--selected:hover {
+  background: #dbeaf9;
+}
+
+.file-row--cut {
+  opacity: 0.55;
+}
+
+.file-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.file-row__icon {
+  width: 20px;
+  height: 20px;
+}
+
+.file-row__name,
+.file-row__kind {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-row__kind {
+  color: var(--text-muted);
+}
+
+.file-row__rename {
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  outline: 0;
+  color: var(--text-primary);
+  background: #fff;
+  font-size: 13px;
+}
+
+.file-list__empty {
+  margin: 4px 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.file-list__band {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: rgb(18 118 193 / 12%);
+  pointer-events: none;
+}
+
+.file-list__error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #f0c9c5;
+  border-radius: 4px;
+  color: #8c2f26;
+  background: #fdf3f2;
+  font-size: 13px;
+}
+
+.file-list__error p {
+  margin: 0;
+}

@@ -1,6 +1,8 @@
 @import "./variables.css";
 @import "./app-shell.css";
 @import "./reset.css";
+@import "../components/ContextMenu/context-menu.css";
+@import "../components/FileList/file-list.css";
 @import "../components/Header/header.css";
 @import "../components/Home/home.css";
 @import "../components/Sidebar/sidebar.css";

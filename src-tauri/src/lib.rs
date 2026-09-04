@@ -106,6 +106,34 @@ impl DirectoryError {
             message: "Unable to open this item.",
         }
     }
+
+    const fn invalid_name() -> Self {
+        Self {
+            code: "invalid_name",
+            message: "That name contains characters that are not allowed.",
+        }
+    }
+
+    const fn already_exists() -> Self {
+        Self {
+            code: "already_exists",
+            message: "An item with that name already exists here.",
+        }
+    }
+
+    const fn invalid_destination() -> Self {
+        Self {
+            code: "invalid_destination",
+            message: "A folder cannot be moved into itself.",
+        }
+    }
+
+    const fn operation_failed() -> Self {
+        Self {
+            code: "operation_failed",
+            message: "Unable to complete that operation.",
+        }
+    }
 }
 
 impl RecentFilesError {
@@ -277,6 +305,114 @@ fn read_directory_listing(path: String) -> Result<DirectoryListing, DirectoryErr
     })
 }
 
+fn validate_entry_name(name: &str) -> Result<&str, DirectoryError> {
+    let name = name.trim();
+    let is_reserved = name.is_empty() || name == "." || name == "..";
+    let has_separator = name.contains('/') || name.contains('\\') || name.contains('\0');
+
+    if is_reserved || has_separator {
+        return Err(DirectoryError::invalid_name());
+    }
+
+    Ok(name)
+}
+
+fn vacant_target(directory: &Path, name: &str) -> Result<PathBuf, DirectoryError> {
+    let target = directory.join(validate_entry_name(name)?);
+
+    if target.symlink_metadata().is_ok() {
+        return Err(DirectoryError::already_exists());
+    }
+
+    Ok(target)
+}
+
+fn copy_recursively(source: &Path, destination: &Path) -> std::io::Result<()> {
+    if !source.symlink_metadata()?.is_dir() {
+        return fs::copy(source, destination).map(|_| ());
+    }
+
+    fs::create_dir(destination)?;
+
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        copy_recursively(&entry.path(), &destination.join(entry.file_name()))?;
+    }
+
+    Ok(())
+}
+
+fn create_directory(parent_path: String, name: String) -> Result<String, DirectoryError> {
+    let parent = resolve_navigable_path(&parent_path)?;
+
+    if !parent.is_dir() {
+        return Err(DirectoryError::unavailable());
+    }
+
+    let target = vacant_target(&parent, &name)?;
+    fs::create_dir(&target).map_err(|_| DirectoryError::operation_failed())?;
+
+    Ok(target.to_string_lossy().into_owned())
+}
+
+fn rename_entry(path: String, name: String) -> Result<String, DirectoryError> {
+    let source = resolve_navigable_path(&path)?;
+    let parent = source.parent().ok_or_else(DirectoryError::unavailable)?;
+    let target = vacant_target(parent, &name)?;
+
+    fs::rename(&source, &target).map_err(|_| DirectoryError::operation_failed())?;
+
+    Ok(target.to_string_lossy().into_owned())
+}
+
+fn delete_entries(paths: Vec<String>) -> Result<(), DirectoryError> {
+    let resolved = paths
+        .iter()
+        .map(|path| resolve_navigable_path(path))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    trash::delete_all(&resolved).map_err(|_| DirectoryError::operation_failed())
+}
+
+fn transfer_entries(
+    paths: Vec<String>,
+    destination_path: String,
+    is_move: bool,
+) -> Result<(), DirectoryError> {
+    let destination = resolve_navigable_path(&destination_path)?;
+
+    if !destination.is_dir() {
+        return Err(DirectoryError::unavailable());
+    }
+
+    for path in &paths {
+        let source = resolve_navigable_path(path)?;
+
+        if destination.starts_with(&source) {
+            return Err(DirectoryError::invalid_destination());
+        }
+
+        let name = source
+            .file_name()
+            .ok_or_else(DirectoryError::unavailable)?
+            .to_string_lossy()
+            .into_owned();
+        let target = vacant_target(&destination, &name)?;
+
+        if is_move && fs::rename(&source, &target).is_ok() {
+            continue;
+        }
+
+        copy_recursively(&source, &target).map_err(|_| DirectoryError::operation_failed())?;
+
+        if is_move {
+            trash::delete(&source).map_err(|_| DirectoryError::operation_failed())?;
+        }
+    }
+
+    Ok(())
+}
+
 fn recently_used_file_path() -> Result<PathBuf, RecentFilesError> {
     current_user_home_directory()
         .map(|home_directory| home_directory.join(".local/share/recently-used.xbel"))
@@ -440,6 +576,40 @@ async fn open_path(path: String) -> Result<(), DirectoryError> {
 }
 
 #[tauri::command]
+async fn new_directory(parent_path: String, name: String) -> Result<String, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || create_directory(parent_path, name))
+        .await
+        .map_err(|_| DirectoryError::operation_failed())?
+}
+
+#[tauri::command]
+async fn rename_path(path: String, name: String) -> Result<String, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || rename_entry(path, name))
+        .await
+        .map_err(|_| DirectoryError::operation_failed())?
+}
+
+#[tauri::command]
+async fn trash_paths(paths: Vec<String>) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || delete_entries(paths))
+        .await
+        .map_err(|_| DirectoryError::operation_failed())?
+}
+
+#[tauri::command]
+async fn transfer_paths(
+    paths: Vec<String>,
+    destination_path: String,
+    is_move: bool,
+) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        transfer_entries(paths, destination_path, is_move)
+    })
+    .await
+    .map_err(|_| DirectoryError::operation_failed())?
+}
+
+#[tauri::command]
 async fn list_recent_files() -> Result<Vec<RecentFile>, RecentFilesError> {
     tauri::async_runtime::spawn_blocking(read_recent_files)
         .await
@@ -464,6 +634,10 @@ pub fn run() {
             resolve_location,
             list_directory,
             open_path,
+            new_directory,
+            rename_path,
+            trash_paths,
+            transfer_paths,
             list_recent_files,
             list_drives
         ])
@@ -473,7 +647,10 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_supported_location, is_user_visible_drive_mount, path_crumbs, resolve_navigable_path};
+    use super::{
+        is_supported_location, is_user_visible_drive_mount, path_crumbs, resolve_navigable_path,
+        validate_entry_name,
+    };
     use std::path::{Path, PathBuf};
 
     #[test]
@@ -515,6 +692,17 @@ mod tests {
     fn navigation_is_refused_outside_your_files_and_drives() {
         assert!(resolve_navigable_path("/etc").is_err());
         assert!(resolve_navigable_path("/no/such/path").is_err());
+    }
+
+    #[test]
+    fn names_cannot_escape_their_directory() {
+        assert_eq!(validate_entry_name("  Reports ").ok(), Some("Reports"));
+        assert!(validate_entry_name("").is_err());
+        assert!(validate_entry_name("..").is_err());
+        assert!(validate_entry_name(".").is_err());
+        assert!(validate_entry_name("../etc").is_err());
+        assert!(validate_entry_name("nested/name").is_err());
+        assert!(validate_entry_name("back\\slash").is_err());
     }
 
     #[test]

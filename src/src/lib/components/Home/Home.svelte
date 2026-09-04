@@ -7,7 +7,8 @@
   import HardDriveIcon from '@fluentui/svg-icons/icons/hard_drive_20_regular.svg?no-inline'
   import PinIcon from '@fluentui/svg-icons/icons/pin_20_regular.svg?no-inline'
   import UsbStickFilledIcon from '@fluentui/svg-icons/icons/usb_stick_20_filled.svg?no-inline'
-  import { fileIcon, folderIcon } from '../../fileIcons'
+  import FileList from '../FileList/FileList.svelte'
+  import { fileIcon } from '../../fileIcons'
   import { navigation } from '../../navigation.svelte'
   import type { DriveInfo, RecentFile } from '../../navigation.svelte'
 
@@ -190,22 +191,8 @@
             <p>{navigation.error}</p>
             <button class="home-view__retry" type="button" onclick={() => navigation.reload()}>Try again</button>
           </div>
-        {:else if navigation.listing?.entries.length === 0}
-          <p class="home-view__state">This folder is empty.</p>
         {:else if navigation.listing}
-          <div class="home-view__recent-list">
-            {#each navigation.listing.entries as entry (entry.path)}
-              <button class="home-view__recent-row" type="button" onclick={() => navigation.openEntry(entry)}>
-                <span
-                  class="masked-icon home-view__recent-icon"
-                  style="--icon: url({(entry.entryType === 'directory' ? folderIcon : fileIcon(entry.name)).icon}); color: {(entry.entryType === 'directory' ? folderIcon : fileIcon(entry.name)).tone}"
-                  aria-hidden="true"
-                ></span>
-                <span>{entry.name}</span>
-                <span class="home-view__recent-location">{entry.entryType === 'directory' ? 'Folder' : 'File'}</span>
-              </button>
-            {/each}
-          </div>
+          <FileList />
         {/if}
       </section>
     {/if}
