@@ -23,7 +23,6 @@
   let searchTimer: ReturnType<typeof setTimeout> | null = null
 
   const active = $derived(tabs.active)
-  const canSearch = $derived(active.view.kind === 'folder' || active.view.kind === 'search')
 
   $effect(() => {
     const view = active.view
@@ -35,7 +34,7 @@
     if (searchTimer) clearTimeout(searchTimer)
 
     searchTimer = setTimeout(() => {
-      if (value.trim()) active.search(value)
+      if (value.trim()) void active.search(value)
     }, SEARCH_DELAY_MS)
   }
 
@@ -154,14 +153,12 @@
       <span class="masked-icon app-header__icon" style="--icon: url({SearchIcon})" aria-hidden="true"></span>
       <input
         type="search"
-        placeholder="Search"
-        aria-label="Search this folder"
-        title={canSearch ? 'Search this folder' : 'Open a folder to search'}
-        disabled={!canSearch}
+        placeholder={`Search ${active.searchScope}`}
+        aria-label={`Search ${active.searchScope}`}
         bind:value={query}
         oninput={() => runSearch(query)}
         onkeydown={(event) => {
-          if (event.key === 'Enter') active.search(query)
+          if (event.key === 'Enter') void active.search(query)
           else if (event.key === 'Escape') {
             query = ''
             if (active.view.kind === 'search') active.back()

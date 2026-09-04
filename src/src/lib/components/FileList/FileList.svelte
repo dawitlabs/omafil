@@ -22,12 +22,25 @@
   const entries = $derived(tabs.active.entries)
   const hiddenCount = $derived(tabs.active.hiddenCount)
 
-  const columns: Array<{ sort: EntrySort; label: string; className: string }> = [
-    { sort: 'name', label: 'Name', className: 'file-row__name' },
-    { sort: 'modified', label: 'Date modified', className: 'file-row__modified' },
-    { sort: 'type', label: 'Type', className: 'file-row__kind' },
-    { sort: 'size', label: 'Size', className: 'file-row__size' },
-  ]
+  // Sorting is a property of a directory listing; search and tag results come
+  // back in walk order, so their headers are labels rather than controls.
+  const isSortable = $derived(tabs.active.view.kind === 'folder')
+
+  const columns = $derived(
+    isSortable
+      ? [
+          { sort: 'name' as EntrySort, label: 'Name', className: 'file-row__name' },
+          { sort: 'modified' as EntrySort, label: 'Date modified', className: 'file-row__modified' },
+          { sort: 'type' as EntrySort, label: 'Type', className: 'file-row__kind' },
+          { sort: 'size' as EntrySort, label: 'Size', className: 'file-row__size' },
+        ]
+      : [
+          { sort: 'name' as EntrySort, label: 'Name', className: 'file-row__name' },
+          { sort: 'type' as EntrySort, label: 'Folder', className: 'file-row__kind' },
+          { sort: 'modified' as EntrySort, label: 'Date modified', className: 'file-row__modified' },
+          { sort: 'size' as EntrySort, label: 'Size', className: 'file-row__size' },
+        ],
+  )
 
   function focusRow(index: number) {
     activeIndex = Math.max(0, Math.min(index, entries.length - 1))
@@ -236,21 +249,25 @@
 
 <div class="file-list__columns" role="presentation">
   <span></span>
-  {#each columns as column (column.sort)}
-    <button
-      class="file-list__column {column.className}"
-      type="button"
-      data-sort={tabs.active.sort === column.sort ? (tabs.active.descending ? 'descending' : 'ascending') : 'none'}
-      aria-label={tabs.active.sort === column.sort
-        ? `Sort by ${column.label}, currently ${tabs.active.descending ? 'descending' : 'ascending'}`
-        : `Sort by ${column.label}`}
-      onclick={() => tabs.active.sortBy(column.sort)}
-    >
-      <span>{column.label}</span>
-      {#if tabs.active.sort === column.sort}
-        <span class="masked-icon file-list__sort-arrow" style="--icon: url({tabs.active.descending ? ChevronDownIcon : ChevronUpIcon})" aria-hidden="true"></span>
-      {/if}
-    </button>
+  {#each columns as column (column.label)}
+    {#if isSortable}
+      <button
+        class="file-list__column {column.className}"
+        type="button"
+        data-sort={tabs.active.sort === column.sort ? (tabs.active.descending ? 'descending' : 'ascending') : 'none'}
+        aria-label={tabs.active.sort === column.sort
+          ? `Sort by ${column.label}, currently ${tabs.active.descending ? 'descending' : 'ascending'}`
+          : `Sort by ${column.label}`}
+        onclick={() => tabs.active.sortBy(column.sort)}
+      >
+        <span>{column.label}</span>
+        {#if tabs.active.sort === column.sort}
+          <span class="masked-icon file-list__sort-arrow" style="--icon: url({tabs.active.descending ? ChevronDownIcon : ChevronUpIcon})" aria-hidden="true"></span>
+        {/if}
+      </button>
+    {:else}
+      <span class="file-list__column file-list__column--static {column.className}">{column.label}</span>
+    {/if}
   {/each}
 </div>
 
@@ -278,6 +295,7 @@
       {entry}
       {index}
       isActive={index === activeIndex}
+      showFolder={!isSortable}
       onactivate={(event) => activateRow(entry, index, event)}
       onopen={() => tabs.active.openEntry(entry)}
       onmenu={(event) => openMenuForRow(entry, index, event)}

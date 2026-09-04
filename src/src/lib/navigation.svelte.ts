@@ -172,9 +172,21 @@ export class Navigation {
     this.#push({ kind: 'folder', path })
   }
 
-  search(query: string) {
+  get searchScope(): string {
     const view = this.view
-    const path = view.kind === 'search' ? view.path : this.directoryPath
+
+    if (view.kind === 'search') return basename(view.path)
+
+    return this.directoryPath ? basename(this.directoryPath) : 'your files'
+  }
+
+  async search(query: string) {
+    const view = this.view
+    const scoped = view.kind === 'search' ? view.path : this.directoryPath
+
+    // Home and the tag, settings and placeholder views have no folder of their
+    // own, so a search from there covers everything the user can reach.
+    const path = scoped || (await invoke<string>('resolve_location', { location: 'home' }).catch(() => ''))
 
     if (!path) return
 

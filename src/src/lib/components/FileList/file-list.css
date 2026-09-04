@@ -70,7 +70,11 @@
   cursor: pointer;
 }
 
-.file-list__column:hover {
+.file-list__column--static {
+  cursor: default;
+}
+
+.file-list__column:not(.file-list__column--static):hover {
   background: var(--surface-hover);
 }
 

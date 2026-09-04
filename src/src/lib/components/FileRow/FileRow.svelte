@@ -1,13 +1,14 @@
 <script lang="ts">
   import { fileIcon, folderIcon } from '../../fileIcons'
   import { fileOperations } from '../../fileOperations.svelte'
-  import { formatBytes, formatModified, typeLabel } from '../../format'
+  import { formatBytes, formatModified, parentFolder, typeLabel } from '../../format'
   import type { DirectoryEntry } from '../../navigation.svelte'
 
   let {
     entry,
     index,
     isActive,
+    showFolder,
     onactivate,
     onopen,
     onmenu,
@@ -15,6 +16,7 @@
     entry: DirectoryEntry
     index: number
     isActive: boolean
+    showFolder: boolean
     onactivate: (event: MouseEvent) => void
     onopen: () => void
     onmenu: (event: MouseEvent) => void
@@ -63,7 +65,12 @@
     <span class="file-row__name">{entry.name}</span>
   {/if}
 
-  <span class="file-row__modified">{formatModified(entry.modified)}</span>
-  <span class="file-row__kind">{typeLabel(entry.name, isDirectory)}</span>
+  {#if showFolder}
+    <span class="file-row__kind" title={parentFolder(entry.path)}>{parentFolder(entry.path)}</span>
+    <span class="file-row__modified">{formatModified(entry.modified)}</span>
+  {:else}
+    <span class="file-row__modified">{formatModified(entry.modified)}</span>
+    <span class="file-row__kind">{typeLabel(entry.name, isDirectory)}</span>
+  {/if}
   <span class="file-row__size">{isDirectory ? '' : formatBytes(entry.size)}</span>
 </div>

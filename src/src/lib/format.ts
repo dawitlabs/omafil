@@ -31,6 +31,12 @@ export function formatItems(count: number): string {
   return `${formatCount(count)} ${count === 1 ? 'item' : 'items'}`
 }
 
+export function parentFolder(path: string): string {
+  const parent = path.slice(0, path.lastIndexOf('/'))
+
+  return parent || '/'
+}
+
 export function typeLabel(name: string, isDirectory: boolean): string {
   if (isDirectory) return 'File folder'
 
