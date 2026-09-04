@@ -1,0 +1,531 @@
+use quick_xml::{events::Event, Reader, XmlVersion};
+use serde::Serialize;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+use sysinfo::Disks;
+use url::Url;
+
+const MAX_DIRECTORY_ENTRIES: usize = 200;
+const MAX_RECENT_FILES: usize = 50;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DirectoryEntry {
+    name: String,
+    path: String,
+    entry_type: DirectoryEntryType,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PathCrumb {
+    name: String,
+    path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DirectoryListing {
+    path: String,
+    crumbs: Vec<PathCrumb>,
+    entries: Vec<DirectoryEntry>,
+}
+
+#[derive(PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum DirectoryEntryType {
+    Directory,
+    File,
+}
+
+#[derive(Serialize)]
+struct DirectoryError {
+    code: &'static str,
+    message: &'static str,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DriveInfo {
+    name: String,
+    mount_point: String,
+    path: String,
+    total_bytes: u64,
+    available_bytes: u64,
+    is_removable: bool,
+    is_read_only: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RecentFile {
+    name: String,
+    path: String,
+    parent_directory: String,
+}
+
+#[derive(Serialize)]
+struct DriveError {
+    code: &'static str,
+    message: &'static str,
+}
+
+#[derive(Serialize)]
+struct RecentFilesError {
+    code: &'static str,
+    message: &'static str,
+}
+
+impl DirectoryError {
+    const fn unavailable() -> Self {
+        Self {
+            code: "directory_unavailable",
+            message: "This folder is unavailable on this device.",
+        }
+    }
+
+    const fn read_failed() -> Self {
+        Self {
+            code: "directory_read_failed",
+            message: "Unable to read this folder.",
+        }
+    }
+
+    const fn not_allowed() -> Self {
+        Self {
+            code: "directory_not_allowed",
+            message: "This location is outside your files and drives.",
+        }
+    }
+
+    const fn open_failed() -> Self {
+        Self {
+            code: "open_failed",
+            message: "Unable to open this item.",
+        }
+    }
+}
+
+impl RecentFilesError {
+    const fn unavailable() -> Self {
+        Self {
+            code: "recent_files_unavailable",
+            message: "Unable to read recent files from this desktop.",
+        }
+    }
+}
+
+fn is_supported_location(location: &str) -> bool {
+    matches!(
+        location,
+        "home" | "desktop" | "documents" | "downloads" | "pictures" | "videos" | "music"
+    )
+}
+
+fn current_user_home_directory() -> Result<PathBuf, DirectoryError> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .filter(|path| path.is_dir())
+        .ok_or_else(DirectoryError::unavailable)
+}
+
+fn known_directory_path(location: &str) -> Result<PathBuf, DirectoryError> {
+    if !is_supported_location(location) {
+        return Err(DirectoryError::unavailable());
+    }
+
+    let home_directory = current_user_home_directory()?;
+    let directory = match location {
+        "home" => home_directory,
+        "desktop" => home_directory.join("Desktop"),
+        "documents" => home_directory.join("Documents"),
+        "downloads" => home_directory.join("Downloads"),
+        "pictures" => home_directory.join("Pictures"),
+        "videos" => home_directory.join("Videos"),
+        "music" => home_directory.join("Music"),
+        _ => return Err(DirectoryError::unavailable()),
+    };
+
+    directory
+        .is_dir()
+        .then_some(directory)
+        .ok_or_else(DirectoryError::unavailable)
+}
+
+fn read_directory_entries(directory: &Path) -> Result<Vec<DirectoryEntry>, ()> {
+    let directory_entries = fs::read_dir(directory).map_err(|_| ())?;
+    let mut entries = Vec::new();
+
+    for directory_entry in directory_entries {
+        let directory_entry = directory_entry.map_err(|_| ())?;
+        let name = directory_entry.file_name().to_string_lossy().into_owned();
+
+        if name.starts_with('.') {
+            continue;
+        }
+
+        let file_type = directory_entry.file_type().map_err(|_| ())?;
+        entries.push(DirectoryEntry {
+            path: directory.join(&name).to_string_lossy().into_owned(),
+            name,
+            entry_type: if file_type.is_dir() {
+                DirectoryEntryType::Directory
+            } else {
+                DirectoryEntryType::File
+            },
+        });
+    }
+
+    entries.sort_by(|left, right| {
+        let left_is_directory = left.entry_type == DirectoryEntryType::Directory;
+        let right_is_directory = right.entry_type == DirectoryEntryType::Directory;
+        right_is_directory
+            .cmp(&left_is_directory)
+            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
+    entries.truncate(MAX_DIRECTORY_ENTRIES);
+
+    Ok(entries)
+}
+
+fn navigable_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+
+    if let Some(home_directory) = current_user_home_directory()
+        .ok()
+        .and_then(|path| path.canonicalize().ok())
+    {
+        roots.push(home_directory);
+    }
+
+    for mount_point in Disks::new_with_refreshed_list()
+        .list()
+        .iter()
+        .map(|disk| disk.mount_point())
+    {
+        if mount_point != Path::new("/") && is_user_visible_drive_mount(mount_point) {
+            if let Ok(root) = mount_point.canonicalize() {
+                roots.push(root);
+            }
+        }
+    }
+
+    roots
+}
+
+fn resolve_navigable_path(path: &str) -> Result<PathBuf, DirectoryError> {
+    let requested = Path::new(path)
+        .canonicalize()
+        .map_err(|_| DirectoryError::unavailable())?;
+
+    navigable_roots()
+        .iter()
+        .any(|root| requested.starts_with(root))
+        .then_some(requested)
+        .ok_or_else(DirectoryError::not_allowed)
+}
+
+fn path_crumbs(directory: &Path, roots: &[PathBuf]) -> Vec<PathCrumb> {
+    let Some(root) = roots
+        .iter()
+        .filter(|root| directory.starts_with(root))
+        .max_by_key(|root| root.components().count())
+    else {
+        return Vec::new();
+    };
+
+    let mut crumbs = vec![PathCrumb {
+        name: display_name(root),
+        path: root.to_string_lossy().into_owned(),
+    }];
+    let mut walked = root.to_path_buf();
+
+    for component in directory.strip_prefix(root).unwrap_or(Path::new("")) {
+        walked.push(component);
+        crumbs.push(PathCrumb {
+            name: component.to_string_lossy().into_owned(),
+            path: walked.to_string_lossy().into_owned(),
+        });
+    }
+
+    crumbs
+}
+
+fn display_name(directory: &Path) -> String {
+    directory
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| directory.to_string_lossy().into_owned())
+}
+
+fn read_directory_listing(path: String) -> Result<DirectoryListing, DirectoryError> {
+    let directory = resolve_navigable_path(&path)?;
+
+    if !directory.is_dir() {
+        return Err(DirectoryError::unavailable());
+    }
+
+    let entries = read_directory_entries(&directory).map_err(|_| DirectoryError::read_failed())?;
+
+    Ok(DirectoryListing {
+        crumbs: path_crumbs(&directory, &navigable_roots()),
+        path: directory.to_string_lossy().into_owned(),
+        entries,
+    })
+}
+
+fn recently_used_file_path() -> Result<PathBuf, RecentFilesError> {
+    current_user_home_directory()
+        .map(|home_directory| home_directory.join(".local/share/recently-used.xbel"))
+        .map_err(|_| RecentFilesError::unavailable())
+}
+
+fn read_recent_files() -> Result<Vec<RecentFile>, RecentFilesError> {
+    let history_path = recently_used_file_path()?;
+    if !history_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let history = fs::read_to_string(history_path).map_err(|_| RecentFilesError::unavailable())?;
+    let mut reader = Reader::from_str(&history);
+    let mut recent_files = Vec::new();
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(event)) if event.name().as_ref() == b"bookmark" => {
+                let mut href = None;
+                let mut modified = None;
+
+                for attribute in event.attributes().flatten() {
+                    match attribute.key.as_ref() {
+                        b"href" => {
+                            href = attribute
+                                .normalized_value(XmlVersion::Explicit1_0)
+                                .ok()
+                                .map(|value| value.into_owned())
+                        }
+                        b"modified" => {
+                            modified = attribute
+                                .normalized_value(XmlVersion::Explicit1_0)
+                                .ok()
+                                .map(|value| value.into_owned())
+                        }
+                        _ => {}
+                    }
+                }
+
+                let Some((href, modified)) = href.zip(modified) else {
+                    continue;
+                };
+                let Ok(url) = Url::parse(&href) else {
+                    continue;
+                };
+                let Ok(path) = url.to_file_path() else {
+                    continue;
+                };
+                if !path.is_file() {
+                    continue;
+                }
+
+                let Some(name) = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                else {
+                    continue;
+                };
+                let parent_directory = path
+                    .parent()
+                    .map(|parent| parent.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+
+                recent_files.push((
+                    modified,
+                    RecentFile {
+                        name,
+                        path: path.to_string_lossy().into_owned(),
+                        parent_directory,
+                    },
+                ));
+            }
+            Ok(Event::Eof) => break,
+            Err(_) => return Err(RecentFilesError::unavailable()),
+            _ => {}
+        }
+    }
+
+    recent_files.sort_by(|left, right| right.0.cmp(&left.0));
+    recent_files.truncate(MAX_RECENT_FILES);
+    Ok(recent_files.into_iter().map(|(_, file)| file).collect())
+}
+
+fn is_user_visible_drive_mount(mount_point: &Path) -> bool {
+    if mount_point == Path::new("/") {
+        return true;
+    }
+
+    mount_point.starts_with("/media")
+        || mount_point.starts_with("/mnt")
+        || mount_point.starts_with("/run/media")
+}
+
+fn drive_navigation_path(mount_point: &Path) -> PathBuf {
+    if mount_point == Path::new("/") {
+        if let Ok(home_directory) = current_user_home_directory() {
+            return home_directory;
+        }
+    }
+
+    mount_point.to_path_buf()
+}
+
+fn read_drives() -> Vec<DriveInfo> {
+    let disks = Disks::new_with_refreshed_list();
+    let home_directory_name = current_user_home_directory().ok().and_then(|path| {
+        path.file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+    });
+    let mut drives = disks
+        .list()
+        .iter()
+        .filter(|disk| disk.total_space() > 0 && is_user_visible_drive_mount(disk.mount_point()))
+        .map(|disk| DriveInfo {
+            name: if disk.mount_point() == Path::new("/") {
+                home_directory_name
+                    .clone()
+                    .unwrap_or_else(|| "Home".to_owned())
+            } else {
+                disk.name().to_string_lossy().into_owned()
+            },
+            mount_point: disk.mount_point().to_string_lossy().into_owned(),
+            path: drive_navigation_path(disk.mount_point())
+                .to_string_lossy()
+                .into_owned(),
+            total_bytes: disk.total_space(),
+            available_bytes: disk.available_space(),
+            is_removable: disk.is_removable(),
+            is_read_only: disk.is_read_only(),
+        })
+        .collect::<Vec<_>>();
+
+    drives.sort_by(|left, right| left.mount_point.cmp(&right.mount_point));
+    drives
+}
+
+#[tauri::command]
+async fn resolve_location(location: String) -> Result<String, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        known_directory_path(&location).map(|path| path.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|_| DirectoryError::unavailable())?
+}
+
+#[tauri::command]
+async fn list_directory(path: String) -> Result<DirectoryListing, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || read_directory_listing(path))
+        .await
+        .map_err(|_| DirectoryError::read_failed())?
+}
+
+#[tauri::command]
+async fn open_path(path: String) -> Result<(), DirectoryError> {
+    let target = tauri::async_runtime::spawn_blocking(move || resolve_navigable_path(&path))
+        .await
+        .map_err(|_| DirectoryError::open_failed())??;
+
+    tauri_plugin_opener::open_path(target, None::<&str>).map_err(|_| DirectoryError::open_failed())
+}
+
+#[tauri::command]
+async fn list_recent_files() -> Result<Vec<RecentFile>, RecentFilesError> {
+    tauri::async_runtime::spawn_blocking(read_recent_files)
+        .await
+        .map_err(|_| RecentFilesError::unavailable())?
+}
+
+#[tauri::command]
+async fn list_drives() -> Result<Vec<DriveInfo>, DriveError> {
+    tauri::async_runtime::spawn_blocking(read_drives)
+        .await
+        .map_err(|_| DriveError {
+            code: "drive_discovery_failed",
+            message: "Unable to discover mounted drives.",
+        })
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![
+            resolve_location,
+            list_directory,
+            open_path,
+            list_recent_files,
+            list_drives
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running Tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_supported_location, is_user_visible_drive_mount, path_crumbs, resolve_navigable_path};
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn only_fixed_locations_are_allowed() {
+        assert!(is_supported_location("home"));
+        assert!(is_supported_location("desktop"));
+        assert!(is_supported_location("music"));
+        assert!(!is_supported_location("/etc"));
+        assert!(!is_supported_location("../Desktop"));
+    }
+
+    #[test]
+    fn drive_usage_percentage_is_bounded_by_total_space() {
+        let total_bytes = 100_u64;
+        let available_bytes = 40_u64;
+        let used_percentage = (total_bytes.saturating_sub(available_bytes) * 100) / total_bytes;
+
+        assert_eq!(used_percentage, 60);
+    }
+
+    #[test]
+    fn crumbs_start_at_the_deepest_matching_root() {
+        let roots = vec![PathBuf::from("/home/dave"), PathBuf::from("/run/media/usb")];
+        let crumbs = path_crumbs(Path::new("/home/dave/Code/omafil"), &roots);
+
+        let trail: Vec<_> = crumbs.iter().map(|crumb| crumb.name.as_str()).collect();
+        assert_eq!(trail, ["dave", "Code", "omafil"]);
+        assert_eq!(crumbs.last().unwrap().path, "/home/dave/Code/omafil");
+    }
+
+    #[test]
+    fn crumbs_are_empty_outside_every_root() {
+        let roots = vec![PathBuf::from("/home/dave")];
+
+        assert!(path_crumbs(Path::new("/etc/ssh"), &roots).is_empty());
+    }
+
+    #[test]
+    fn navigation_is_refused_outside_your_files_and_drives() {
+        assert!(resolve_navigable_path("/etc").is_err());
+        assert!(resolve_navigable_path("/no/such/path").is_err());
+    }
+
+    #[test]
+    fn only_user_facing_linux_mounts_appear_as_drives() {
+        assert!(is_user_visible_drive_mount(Path::new("/")));
+        assert!(is_user_visible_drive_mount(Path::new(
+            "/run/media/dave/USB"
+        )));
+        assert!(is_user_visible_drive_mount(Path::new("/media/USB")));
+        assert!(!is_user_visible_drive_mount(Path::new("/proc")));
+        assert!(!is_user_visible_drive_mount(Path::new("/var/lib/docker")));
+        assert!(!is_user_visible_drive_mount(Path::new("/home")));
+    }
+}

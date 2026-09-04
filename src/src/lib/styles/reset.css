@@ -1,0 +1,28 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  color: var(--text-primary);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.masked-icon {
+  flex: none;
+  display: block;
+  background: currentColor;
+  mask: var(--icon) center / contain no-repeat;
+  -webkit-mask: var(--icon) center / contain no-repeat;
+}

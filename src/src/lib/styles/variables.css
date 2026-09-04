@@ -1,0 +1,36 @@
+:root {
+  --app-tabstrip-height: 32px;
+  --app-commandbar-height: 36px;
+  --app-header-height: 68px;
+  --sidebar-width: 240px;
+
+  --surface-sidebar: #ebe9f6;
+  --surface-tabstrip: #eeebf6;
+  --surface-commandbar: #fdfcff;
+  --surface-content: #fff;
+  --surface-card: #f4f4f4;
+  --surface-card-hover: #ededed;
+  --surface-status: #eaebed;
+  --surface-nav-hover: #e2e0ef;
+  --surface-nav-selected: #fbfbfb;
+  --surface-hover: #f0f0f0;
+
+  --border-subtle: #e5e5e5;
+  --border-commandbar: #f0f0f0;
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #3b3b3b;
+  --text-muted: #6d6d75;
+  --text-accent: #0b70c2;
+
+  --accent: #1276c1;
+  --progress-track: #d2d2d2;
+
+  --tag-red: #f5342e;
+  --tag-yellow: #ffc72c;
+  --tag-blue: #0a84e8;
+
+  --folder-tab: #efa92a;
+  --folder-body-top: #fddd86;
+  --folder-body-bottom: #f5c64c;
+}
