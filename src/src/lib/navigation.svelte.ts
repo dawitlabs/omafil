@@ -4,7 +4,11 @@ export type DirectoryEntry = {
   name: string
   path: string
   entryType: 'directory' | 'file'
+  size: number
+  modified: number | null
 }
+
+export type EntrySort = 'name' | 'modified' | 'type' | 'size'
 
 export type PathCrumb = {
   name: string
@@ -15,7 +19,10 @@ export type DirectoryListing = {
   path: string
   crumbs: PathCrumb[]
   entries: DirectoryEntry[]
+  total: number
 }
+
+const descendingByDefault: EntrySort[] = ['size', 'modified']
 
 export type DriveInfo = {
   name: string
@@ -59,6 +66,8 @@ class Navigation {
   listing = $state<DirectoryListing | null>(null)
   isLoading = $state(false)
   error = $state<string | null>(null)
+  sort = $state<EntrySort>('name')
+  descending = $state(false)
 
   get view(): View {
     return this.#history[this.#index]
@@ -161,6 +170,12 @@ class Navigation {
     void this.#load()
   }
 
+  sortBy(sort: EntrySort) {
+    this.descending = this.sort === sort ? !this.descending : descendingByDefault.includes(sort)
+    this.sort = sort
+    void this.#load()
+  }
+
   #push(view: View) {
     if (view.kind === 'folder' && this.isCurrentPath(view.path)) return
 
@@ -183,7 +198,11 @@ class Navigation {
     this.isLoading = true
 
     try {
-      const listing = await invoke<DirectoryListing>('list_directory', { path: view.path })
+      const listing = await invoke<DirectoryListing>('list_directory', {
+        path: view.path,
+        sort: this.sort,
+        descending: this.descending,
+      })
 
       if (requestId === this.#requestSequence) this.listing = listing
     } catch (error) {

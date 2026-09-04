@@ -1,13 +1,14 @@
 use quick_xml::{events::Event, Reader, XmlVersion};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     fs,
     path::{Path, PathBuf},
+    time::UNIX_EPOCH,
 };
 use sysinfo::Disks;
 use url::Url;
 
-const MAX_DIRECTORY_ENTRIES: usize = 200;
+const MAX_DIRECTORY_ENTRIES: usize = 2000;
 const MAX_RECENT_FILES: usize = 50;
 
 #[derive(Serialize)]
@@ -16,6 +17,17 @@ struct DirectoryEntry {
     name: String,
     path: String,
     entry_type: DirectoryEntryType,
+    size: u64,
+    modified: Option<i64>,
+}
+
+#[derive(Clone, Copy, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum EntrySort {
+    Name,
+    Size,
+    Modified,
+    Type,
 }
 
 #[derive(Serialize)]
@@ -31,6 +43,7 @@ struct DirectoryListing {
     path: String,
     crumbs: Vec<PathCrumb>,
     entries: Vec<DirectoryEntry>,
+    total: usize,
 }
 
 #[derive(PartialEq, Eq, Serialize)]
@@ -183,7 +196,47 @@ fn known_directory_path(location: &str) -> Result<PathBuf, DirectoryError> {
         .ok_or_else(DirectoryError::unavailable)
 }
 
-fn read_directory_entries(directory: &Path) -> Result<Vec<DirectoryEntry>, ()> {
+fn entry_extension(name: &str) -> String {
+    name.rsplit_once('.')
+        .map(|(stem, extension)| {
+            if stem.is_empty() {
+                String::new()
+            } else {
+                extension.to_lowercase()
+            }
+        })
+        .unwrap_or_default()
+}
+
+fn compare_entries(
+    left: &DirectoryEntry,
+    right: &DirectoryEntry,
+    sort: EntrySort,
+    descending: bool,
+) -> std::cmp::Ordering {
+    let left_is_directory = left.entry_type == DirectoryEntryType::Directory;
+    let right_is_directory = right.entry_type == DirectoryEntryType::Directory;
+    let by_name = left.name.to_lowercase().cmp(&right.name.to_lowercase());
+
+    let by_key = match sort {
+        EntrySort::Name => by_name,
+        EntrySort::Size => left.size.cmp(&right.size).then(by_name),
+        EntrySort::Modified => left.modified.cmp(&right.modified).then(by_name),
+        EntrySort::Type => entry_extension(&left.name)
+            .cmp(&entry_extension(&right.name))
+            .then(by_name),
+    };
+
+    right_is_directory
+        .cmp(&left_is_directory)
+        .then(if descending { by_key.reverse() } else { by_key })
+}
+
+fn read_directory_entries(
+    directory: &Path,
+    sort: EntrySort,
+    descending: bool,
+) -> Result<(Vec<DirectoryEntry>, usize), ()> {
     let directory_entries = fs::read_dir(directory).map_err(|_| ())?;
     let mut entries = Vec::new();
 
@@ -196,6 +249,8 @@ fn read_directory_entries(directory: &Path) -> Result<Vec<DirectoryEntry>, ()> {
         }
 
         let file_type = directory_entry.file_type().map_err(|_| ())?;
+        let metadata = directory_entry.metadata().ok();
+
         entries.push(DirectoryEntry {
             path: directory.join(&name).to_string_lossy().into_owned(),
             name,
@@ -204,19 +259,21 @@ fn read_directory_entries(directory: &Path) -> Result<Vec<DirectoryEntry>, ()> {
             } else {
                 DirectoryEntryType::File
             },
+            size: metadata.as_ref().map_or(0, |data| data.len()),
+            modified: metadata
+                .as_ref()
+                .and_then(|data| data.modified().ok())
+                .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                .map(|elapsed| elapsed.as_secs() as i64),
         });
     }
 
-    entries.sort_by(|left, right| {
-        let left_is_directory = left.entry_type == DirectoryEntryType::Directory;
-        let right_is_directory = right.entry_type == DirectoryEntryType::Directory;
-        right_is_directory
-            .cmp(&left_is_directory)
-            .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
-    });
+    entries.sort_by(|left, right| compare_entries(left, right, sort, descending));
+
+    let total = entries.len();
     entries.truncate(MAX_DIRECTORY_ENTRIES);
 
-    Ok(entries)
+    Ok((entries, total))
 }
 
 fn navigable_roots() -> Vec<PathBuf> {
@@ -289,19 +346,25 @@ fn display_name(directory: &Path) -> String {
         .unwrap_or_else(|| directory.to_string_lossy().into_owned())
 }
 
-fn read_directory_listing(path: String) -> Result<DirectoryListing, DirectoryError> {
+fn read_directory_listing(
+    path: String,
+    sort: EntrySort,
+    descending: bool,
+) -> Result<DirectoryListing, DirectoryError> {
     let directory = resolve_navigable_path(&path)?;
 
     if !directory.is_dir() {
         return Err(DirectoryError::unavailable());
     }
 
-    let entries = read_directory_entries(&directory).map_err(|_| DirectoryError::read_failed())?;
+    let (entries, total) = read_directory_entries(&directory, sort, descending)
+        .map_err(|_| DirectoryError::read_failed())?;
 
     Ok(DirectoryListing {
         crumbs: path_crumbs(&directory, &navigable_roots()),
         path: directory.to_string_lossy().into_owned(),
         entries,
+        total,
     })
 }
 
@@ -560,8 +623,12 @@ async fn resolve_location(location: String) -> Result<String, DirectoryError> {
 }
 
 #[tauri::command]
-async fn list_directory(path: String) -> Result<DirectoryListing, DirectoryError> {
-    tauri::async_runtime::spawn_blocking(move || read_directory_listing(path))
+async fn list_directory(
+    path: String,
+    sort: EntrySort,
+    descending: bool,
+) -> Result<DirectoryListing, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || read_directory_listing(path, sort, descending))
         .await
         .map_err(|_| DirectoryError::read_failed())?
 }
@@ -648,10 +715,30 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::{
-        is_supported_location, is_user_visible_drive_mount, path_crumbs, resolve_navigable_path,
-        validate_entry_name,
+        compare_entries, entry_extension, is_supported_location, is_user_visible_drive_mount,
+        path_crumbs, resolve_navigable_path, validate_entry_name, DirectoryEntry,
+        DirectoryEntryType, EntrySort,
     };
     use std::path::{Path, PathBuf};
+
+    fn entry(name: &str, is_directory: bool, size: u64) -> DirectoryEntry {
+        DirectoryEntry {
+            name: name.to_owned(),
+            path: format!("/home/dave/{name}"),
+            entry_type: if is_directory {
+                DirectoryEntryType::Directory
+            } else {
+                DirectoryEntryType::File
+            },
+            size,
+            modified: Some(size as i64),
+        }
+    }
+
+    fn sorted(mut entries: Vec<DirectoryEntry>, sort: EntrySort, descending: bool) -> Vec<String> {
+        entries.sort_by(|left, right| compare_entries(left, right, sort, descending));
+        entries.into_iter().map(|item| item.name).collect()
+    }
 
     #[test]
     fn only_fixed_locations_are_allowed() {
@@ -692,6 +779,23 @@ mod tests {
     fn navigation_is_refused_outside_your_files_and_drives() {
         assert!(resolve_navigable_path("/etc").is_err());
         assert!(resolve_navigable_path("/no/such/path").is_err());
+    }
+
+    #[test]
+    fn folders_stay_first_in_both_sort_directions() {
+        let listing = || vec![entry("big.iso", false, 900), entry("a.txt", false, 10), entry("Work", true, 0)];
+
+        assert_eq!(sorted(listing(), EntrySort::Size, false), ["Work", "a.txt", "big.iso"]);
+        assert_eq!(sorted(listing(), EntrySort::Size, true), ["Work", "big.iso", "a.txt"]);
+        assert_eq!(sorted(listing(), EntrySort::Name, true), ["Work", "big.iso", "a.txt"]);
+    }
+
+    #[test]
+    fn extensions_ignore_dotfiles_and_bare_names() {
+        assert_eq!(entry_extension("notes.MD"), "md");
+        assert_eq!(entry_extension("archive.tar.gz"), "gz");
+        assert_eq!(entry_extension("README"), "");
+        assert_eq!(entry_extension(".bashrc"), "");
     }
 
     #[test]

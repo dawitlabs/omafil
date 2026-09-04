@@ -9,6 +9,8 @@
   import UsbStickFilledIcon from '@fluentui/svg-icons/icons/usb_stick_20_filled.svg?no-inline'
   import FileList from '../FileList/FileList.svelte'
   import { fileIcon } from '../../fileIcons'
+  import { fileOperations } from '../../fileOperations.svelte'
+  import { formatBytes, formatCount } from '../../format'
   import { navigation } from '../../navigation.svelte'
   import type { DriveInfo, RecentFile } from '../../navigation.svelte'
 
@@ -31,19 +33,6 @@
     }
 
     return fallback
-  }
-
-  function formatBytes(bytes: number): string {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB']
-    let unitIndex = 0
-    let value = bytes
-
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024
-      unitIndex += 1
-    }
-
-    return `${value >= 10 || unitIndex === 0 ? Math.round(value) : value.toFixed(1)} ${units[unitIndex]}`
   }
 
   function usedPercentage(drive: DriveInfo): number {
@@ -206,7 +195,9 @@
       {:else if navigation.isLoading}
         Loading…
       {:else}
-        {navigation.listing?.entries.length ?? 0} items
+        {formatCount(navigation.listing?.total ?? 0)} items{fileOperations.selectedPaths.length > 0
+          ? ` · ${fileOperations.selectedPaths.length} selected`
+          : ''}
       {/if}
     </span>
   </footer>

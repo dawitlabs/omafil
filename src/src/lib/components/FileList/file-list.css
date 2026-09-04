@@ -37,6 +37,62 @@
   background: var(--border-subtle);
 }
 
+.file-list__notice {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid #f0e3c2;
+  border-radius: 4px;
+  color: #7a5c12;
+  background: #fdf8ec;
+  font-size: 12px;
+}
+
+.file-list__columns {
+  gap: 12px;
+  height: 30px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.file-list__column {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px;
+  margin: 0 -6px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.file-list__column:hover {
+  background: var(--surface-hover);
+}
+
+.file-list__column:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.file-list__column[data-sort='ascending'],
+.file-list__column[data-sort='descending'] {
+  color: var(--text-primary);
+}
+
+.file-list__column.file-row__size {
+  justify-content: flex-end;
+}
+
+.file-list__sort-arrow {
+  width: 10px;
+  height: 10px;
+}
+
 .file-list {
   position: relative;
   display: grid;
@@ -46,9 +102,10 @@
   user-select: none;
 }
 
+.file-list__columns,
 .file-row {
   display: grid;
-  grid-template-columns: 20px minmax(120px, 1fr) minmax(0, 340px);
+  grid-template-columns: 20px minmax(140px, 2fr) 150px minmax(90px, 1fr) 90px;
   align-items: center;
   gap: 12px;
   height: 36px;
@@ -87,14 +144,22 @@
 }
 
 .file-row__name,
-.file-row__kind {
+.file-row__modified,
+.file-row__kind,
+.file-row__size {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.file-row__kind {
+.file-row__modified,
+.file-row__kind,
+.file-row__size {
   color: var(--text-muted);
+}
+
+.file-row__size {
+  text-align: right;
 }
 
 .file-row__rename {

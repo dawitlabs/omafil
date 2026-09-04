@@ -1,10 +1,13 @@
 <script lang="ts">
+  import ChevronDownIcon from '@fluentui/svg-icons/icons/chevron_down_12_filled.svg?no-inline'
+  import ChevronUpIcon from '@fluentui/svg-icons/icons/chevron_up_12_filled.svg?no-inline'
   import ContextMenu from '../ContextMenu/ContextMenu.svelte'
   import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
   import { fileIcon, folderIcon } from '../../fileIcons'
+  import { formatBytes, formatCount, formatModified, typeLabel } from '../../format'
   import { fileOperations } from '../../fileOperations.svelte'
   import { navigation } from '../../navigation.svelte'
-  import type { DirectoryEntry } from '../../navigation.svelte'
+  import type { DirectoryEntry, EntrySort } from '../../navigation.svelte'
 
   type Band = { left: number; top: number; width: number; height: number }
 
@@ -17,6 +20,14 @@
   let bandOrigin: { x: number; y: number } | null = null
 
   const entries = $derived(navigation.listing?.entries ?? [])
+  const hiddenCount = $derived((navigation.listing?.total ?? 0) - entries.length)
+
+  const columns: Array<{ sort: EntrySort; label: string; className: string }> = [
+    { sort: 'name', label: 'Name', className: 'file-row__name' },
+    { sort: 'modified', label: 'Date modified', className: 'file-row__modified' },
+    { sort: 'type', label: 'Type', className: 'file-row__kind' },
+    { sort: 'size', label: 'Size', className: 'file-row__size' },
+  ]
 
   $effect(() => {
     const path = fileOperations.renamingPath
@@ -241,6 +252,32 @@
   </div>
 {/if}
 
+{#if hiddenCount > 0}
+  <p class="file-list__notice">
+    Showing the first {formatCount(entries.length)} of {formatCount(navigation.listing?.total ?? 0)} items, sorted by {navigation.sort}.
+  </p>
+{/if}
+
+<div class="file-list__columns" role="presentation">
+  <span></span>
+  {#each columns as column (column.sort)}
+    <button
+      class="file-list__column {column.className}"
+      type="button"
+      data-sort={navigation.sort === column.sort ? (navigation.descending ? 'descending' : 'ascending') : 'none'}
+      aria-label={navigation.sort === column.sort
+        ? `Sort by ${column.label}, currently ${navigation.descending ? 'descending' : 'ascending'}`
+        : `Sort by ${column.label}`}
+      onclick={() => navigation.sortBy(column.sort)}
+    >
+      <span>{column.label}</span>
+      {#if navigation.sort === column.sort}
+        <span class="masked-icon file-list__sort-arrow" style="--icon: url({navigation.descending ? ChevronDownIcon : ChevronUpIcon})" aria-hidden="true"></span>
+      {/if}
+    </button>
+  {/each}
+</div>
+
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   bind:this={list}
@@ -299,7 +336,9 @@
         <span class="file-row__name">{entry.name}</span>
       {/if}
 
-      <span class="file-row__kind">{entry.entryType === 'directory' ? 'Folder' : 'File'}</span>
+      <span class="file-row__modified">{formatModified(entry.modified)}</span>
+      <span class="file-row__kind">{typeLabel(entry.name, entry.entryType === 'directory')}</span>
+      <span class="file-row__size">{entry.entryType === 'directory' ? '' : formatBytes(entry.size)}</span>
     </div>
   {/each}
 
