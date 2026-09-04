@@ -9,10 +9,10 @@
   z-index: 21;
   min-width: 208px;
   padding: 5px;
-  border: 1px solid #e2e2e2;
+  border: 1px solid var(--border-menu);
   border-radius: 8px;
-  background: #fbfbfb;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 14%);
+  background: var(--surface-menu);
+  box-shadow: var(--shadow-menu);
 }
 
 .context-menu__item {
@@ -42,7 +42,7 @@
 }
 
 .context-menu__item:disabled {
-  color: #a6a6a6;
+  color: var(--text-disabled);
   cursor: default;
 }
 
@@ -52,7 +52,7 @@
 }
 
 .context-menu__item:disabled .context-menu__shortcut {
-  color: #bdbdbd;
+  color: var(--text-disabled);
 }
 
 .context-menu__separator {
@@ -75,9 +75,9 @@
   flex: none;
   width: 14px;
   height: 14px;
-  border: 1px solid #b9b9b9;
+  border: 1px solid var(--border-strong);
   border-radius: 3px;
-  background: #fff;
+  background: var(--surface-input);
 }
 
 .context-menu__check--on {
@@ -93,7 +93,7 @@
   left: 4px;
   width: 4px;
   height: 8px;
-  border: solid #fff;
+  border: solid var(--text-on-accent);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }

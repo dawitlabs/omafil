@@ -13,9 +13,6 @@
   import SettingsIcon from '@fluentui/svg-icons/icons/settings_20_regular.svg?no-inline'
   import MaximizeIcon from '@fluentui/svg-icons/icons/square_20_regular.svg?no-inline'
   import { getCurrentWindow } from '@tauri-apps/api/window'
-  import ContextMenu from '../ContextMenu/ContextMenu.svelte'
-  import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
-  import { appState } from '../../appState.svelte'
   import { tabs } from '../../tabs.svelte'
 
   const SEARCH_DELAY_MS = 300
@@ -23,24 +20,10 @@
   const appWindow = getCurrentWindow()
 
   let query = $state('')
-  let settingsAt = $state<{ x: number; y: number } | null>(null)
   let searchTimer: ReturnType<typeof setTimeout> | null = null
 
   const active = $derived(tabs.active)
   const canSearch = $derived(active.view.kind === 'folder' || active.view.kind === 'search')
-
-  const settingsItems: ContextMenuItem[] = $derived([
-    { kind: 'heading', label: 'Settings' },
-    {
-      kind: 'toggle',
-      label: 'Show hidden files',
-      checked: appState.settings.showHidden,
-      onSelect: () => {
-        appState.setShowHidden(!appState.settings.showHidden)
-        active.reload()
-      },
-    },
-  ])
 
   $effect(() => {
     const view = active.view
@@ -114,12 +97,10 @@
 
     <button
       class="app-header__settings-button"
+      class:app-header__settings-button--active={active.view.kind === 'settings'}
       type="button"
       aria-label="Settings"
-      onclick={(event) => {
-        const bounds = event.currentTarget.getBoundingClientRect()
-        settingsAt = { x: bounds.right - 220, y: bounds.bottom + 4 }
-      }}
+      onclick={() => active.openSettings()}
     >
       <span class="masked-icon app-header__icon" style="--icon: url({SettingsIcon})" aria-hidden="true"></span>
     </button>
@@ -191,7 +172,3 @@
     </label>
   </div>
 </header>
-
-{#if settingsAt}
-  <ContextMenu x={settingsAt.x} y={settingsAt.y} items={settingsItems} onclose={() => (settingsAt = null)} />
-{/if}

@@ -26,10 +26,24 @@ pub(crate) struct Tag {
     pub(crate) color: String,
 }
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub(crate) struct Settings {
     pub(crate) show_hidden: bool,
+    pub(crate) theme: String,
+    pub(crate) default_sort: String,
+    pub(crate) default_descending: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            show_hidden: false,
+            theme: "system".to_owned(),
+            default_sort: "name".to_owned(),
+            default_descending: false,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -87,6 +101,8 @@ mod tests {
         assert_eq!(state.pins[0].label, "Code");
         assert!(state.tags.is_empty());
         assert!(!state.settings.show_hidden);
+        assert_eq!(state.settings.theme, "system");
+        assert_eq!(state.settings.default_sort, "name");
     }
 
     #[test]

@@ -6,12 +6,14 @@
   import HardDriveFilledIcon from '@fluentui/svg-icons/icons/hard_drive_20_filled.svg?no-inline'
   import HardDriveIcon from '@fluentui/svg-icons/icons/hard_drive_20_regular.svg?no-inline'
   import PinIcon from '@fluentui/svg-icons/icons/pin_20_regular.svg?no-inline'
+  import SettingsIcon from '@fluentui/svg-icons/icons/settings_20_regular.svg?no-inline'
   import UsbStickFilledIcon from '@fluentui/svg-icons/icons/usb_stick_20_filled.svg?no-inline'
   import FileList from '../FileList/FileList.svelte'
+  import Settings from '../Settings/Settings.svelte'
   import { appState } from '../../appState.svelte'
   import { fileIcon } from '../../fileIcons'
   import { fileOperations } from '../../fileOperations.svelte'
-  import { formatBytes, formatCount } from '../../format'
+  import { formatBytes, formatItems } from '../../format'
   import { tabs } from '../../tabs.svelte'
   import type { DriveInfo, RecentFile } from '../../navigation.svelte'
 
@@ -71,7 +73,14 @@
 
 <div class="home-screen">
   <div class="home-view">
-    {#if tabs.active.view.kind === 'home'}
+    {#if tabs.active.view.kind === 'settings'}
+      <section class="home-view__section" aria-labelledby="settings-heading">
+        <h1 id="settings-heading" class="home-view__heading">
+          <span class="masked-icon home-view__heading-icon" style="--icon: url({SettingsIcon})" aria-hidden="true"></span><span>Settings</span>
+        </h1>
+        <Settings />
+      </section>
+    {:else if tabs.active.view.kind === 'home'}
       <section class="home-view__section" aria-labelledby="pinned-heading">
         <h1 id="pinned-heading" class="home-view__heading">
           <span class="masked-icon home-view__heading-icon" style="--icon: url({PinIcon})" aria-hidden="true"></span><span>Pinned</span>
@@ -179,12 +188,14 @@
   <footer class="home-status" aria-label="Folder status">
     <span>{tabs.active.label}</span>
     <span>
-      {#if tabs.active.view.kind === 'home'}
-        {recentFiles.length} items
+      {#if tabs.active.view.kind === 'settings'}
+        {''}
+      {:else if tabs.active.view.kind === 'home'}
+        {formatItems(recentFiles.length)}
       {:else if tabs.active.isLoading}
         Loading…
       {:else}
-        {formatCount(tabs.active.total)} items{fileOperations.selectedPaths.length > 0
+        {formatItems(tabs.active.total)}{fileOperations.selectedPaths.length > 0
           ? ` · ${fileOperations.selectedPaths.length} selected`
           : ''}
       {/if}

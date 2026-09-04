@@ -26,7 +26,7 @@
 }
 
 .file-commands__button:disabled {
-  color: #b3b3b3;
+  color: var(--text-disabled);
   cursor: default;
 }
 
@@ -40,10 +40,10 @@
 .file-list__notice {
   margin: 0 0 12px;
   padding: 8px 12px;
-  border: 1px solid #f0e3c2;
+  border: 1px solid var(--border-notice);
   border-radius: 4px;
-  color: #7a5c12;
-  background: #fdf8ec;
+  color: var(--text-notice);
+  background: var(--surface-notice);
   font-size: 12px;
 }
 
@@ -122,11 +122,11 @@
 
 .file-row--selected {
   color: var(--text-selected, var(--text-primary));
-  background: #e5f0fb;
+  background: var(--surface-selected);
 }
 
 .file-row--selected:hover {
-  background: #dbeaf9;
+  background: var(--surface-selected-hover);
 }
 
 .file-row--cut {
@@ -170,7 +170,7 @@
   border-radius: 3px;
   outline: 0;
   color: var(--text-primary);
-  background: #fff;
+  background: var(--surface-input);
   font-size: 13px;
 }
 
@@ -186,7 +186,7 @@
   z-index: 1;
   border: 1px solid var(--accent);
   border-radius: 2px;
-  background: rgb(18 118 193 / 12%);
+  background: var(--accent-soft);
   pointer-events: none;
 }
 
@@ -196,10 +196,10 @@
   gap: 12px;
   margin-bottom: 12px;
   padding: 10px 12px;
-  border: 1px solid #f0c9c5;
+  border: 1px solid var(--border-danger);
   border-radius: 4px;
-  color: #8c2f26;
-  background: #fdf3f2;
+  color: var(--text-danger);
+  background: var(--surface-danger);
   font-size: 13px;
 }
 

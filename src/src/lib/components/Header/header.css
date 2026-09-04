@@ -41,7 +41,7 @@
 }
 
 .app-header__tab:hover {
-  background: rgb(255 255 255 / 55%);
+  background: var(--surface-tab-hover);
 }
 
 .app-header__tab--active,
@@ -98,7 +98,7 @@
 }
 
 .app-header__tab-close:hover {
-  background: rgb(0 0 0 / 8%);
+  background: var(--overlay-hover-strong);
 }
 
 .app-header__tab-select:focus-visible,
@@ -139,6 +139,11 @@
   cursor: pointer;
 }
 
+.app-header__settings-button--active {
+  color: var(--text-accent);
+  background: var(--overlay-hover);
+}
+
 .app-header__commandbar {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) 254px;
@@ -162,7 +167,7 @@
 
 .app-header__icon-button:disabled,
 .app-header__new-tab:disabled {
-  color: #b3b3b3;
+  color: var(--text-disabled);
   cursor: default;
 }
 
@@ -237,9 +242,9 @@
   gap: 10px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid #e6e6e6;
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
-  background: #fff;
+  background: var(--surface-input);
 }
 
 .app-header__search input {
@@ -281,12 +286,12 @@
 }
 
 .app-header__window-button:hover {
-  background: rgb(0 0 0 / 6%);
+  background: var(--overlay-hover);
 }
 
 .app-header__window-button--close:hover {
-  color: #fff;
-  background: #c42b1c;
+  color: var(--text-on-accent);
+  background: var(--danger-strong);
 }
 
 .app-header__window-button:focus-visible,

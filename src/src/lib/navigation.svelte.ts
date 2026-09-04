@@ -52,6 +52,7 @@ export type SearchResults = {
 
 export type View =
   | { kind: 'home' }
+  | { kind: 'settings' }
   | { kind: 'folder'; path: string }
   | { kind: 'search'; path: string; query: string }
   | { kind: 'tag'; id: string; label: string }
@@ -78,8 +79,16 @@ export class Navigation {
   results = $state<SearchResults | null>(null)
   isLoading = $state(false)
   error = $state<string | null>(null)
-  sort = $state<EntrySort>('name')
-  descending = $state(false)
+  #sort = $state<EntrySort | null>(null)
+  #descending = $state<boolean | null>(null)
+
+  get sort(): EntrySort {
+    return this.#sort ?? appState.settings.defaultSort
+  }
+
+  get descending(): boolean {
+    return this.#descending ?? appState.settings.defaultDescending
+  }
 
   get view(): View {
     return this.#history[this.#index]
@@ -133,6 +142,7 @@ export class Navigation {
     const view = this.view
 
     if (view.kind === 'home') return 'Home'
+    if (view.kind === 'settings') return 'Settings'
     if (view.kind === 'placeholder') return view.label
     if (view.kind === 'tag') return view.label
     if (view.kind === 'search') return `Search: ${view.query}`
@@ -148,6 +158,10 @@ export class Navigation {
 
   goHome() {
     this.#push({ kind: 'home' })
+  }
+
+  openSettings() {
+    this.#push({ kind: 'settings' })
   }
 
   openPlaceholder(label: string) {
@@ -224,8 +238,8 @@ export class Navigation {
   }
 
   sortBy(sort: EntrySort) {
-    this.descending = this.sort === sort ? !this.descending : descendingByDefault.includes(sort)
-    this.sort = sort
+    this.#descending = this.sort === sort ? !this.descending : descendingByDefault.includes(sort)
+    this.#sort = sort
     void this.#load()
   }
 
@@ -250,7 +264,7 @@ export class Navigation {
     const requestId = ++this.#requestSequence
     this.error = null
 
-    if (view.kind === 'home' || view.kind === 'placeholder') {
+    if (view.kind === 'home' || view.kind === 'placeholder' || view.kind === 'settings') {
       this.listing = null
       this.results = null
       this.isLoading = false

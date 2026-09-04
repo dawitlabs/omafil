@@ -5,7 +5,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-color: #c3c1d2 transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
   scrollbar-width: thin;
   padding: 0 10px 18px;
   color: var(--text-muted);
@@ -129,7 +129,7 @@
   border-radius: 3px;
   outline: 0;
   color: var(--text-primary);
-  background: #fff;
+  background: var(--surface-input);
   font-size: 13px;
 }
 
@@ -140,6 +140,6 @@
 .file-sidebar::-webkit-scrollbar-thumb {
   border: 2px solid transparent;
   border-radius: 999px;
-  background: #c3c1d2;
+  background: var(--scrollbar-thumb);
   background-clip: padding-box;
 }

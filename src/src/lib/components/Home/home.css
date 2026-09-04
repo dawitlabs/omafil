@@ -141,11 +141,11 @@
 .home-view__drive-icon {
   width: 42px;
   height: 42px;
-  color: #5b5b5b;
+  color: var(--icon-drive);
 }
 
 .home-view__drive-icon--removable {
-  color: #1a86e0;
+  color: var(--icon-drive-removable);
 }
 
 .home-view__drive-content {
@@ -246,7 +246,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
   color: var(--text-primary);
-  background: #fff;
+  background: var(--surface-input);
   font-size: 13px;
   cursor: pointer;
 }
@@ -256,8 +256,8 @@
 }
 
 .home-view__retry:disabled {
-  color: #9a9a9a;
-  background: #f5f5f5;
+  color: var(--text-disabled);
+  background: var(--surface-hover);
   cursor: default;
 }
 
@@ -267,7 +267,7 @@
   justify-content: space-between;
   height: 28px;
   padding: 0 16px 0 30px;
-  border-top: 1px solid #dedede;
+  border-top: 1px solid var(--border-status);
   color: var(--text-secondary);
   background: var(--surface-status);
   font-size: 12px;

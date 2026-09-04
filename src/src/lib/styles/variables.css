@@ -4,27 +4,55 @@
   --app-header-height: 68px;
   --sidebar-width: 240px;
 
+  color-scheme: light;
+
   --surface-sidebar: #ebe9f6;
   --surface-tabstrip: #eeebf6;
   --surface-commandbar: #fdfcff;
   --surface-content: #fff;
+  --surface-input: #fff;
+  --surface-menu: #fbfbfb;
   --surface-card: #f4f4f4;
   --surface-card-hover: #ededed;
   --surface-status: #eaebed;
+  --surface-hover: #f0f0f0;
   --surface-nav-hover: #e2e0ef;
   --surface-nav-selected: #fbfbfb;
-  --surface-hover: #f0f0f0;
+  --surface-selected: #e5f0fb;
+  --surface-selected-hover: #dbeaf9;
+  --surface-tab-hover: rgb(255 255 255 / 55%);
+  --overlay-hover: rgb(0 0 0 / 6%);
+  --overlay-hover-strong: rgb(0 0 0 / 8%);
 
   --border-subtle: #e5e5e5;
   --border-commandbar: #f0f0f0;
+  --border-strong: #b9b9b9;
+  --border-menu: #e2e2e2;
+  --border-status: #dedede;
 
   --text-primary: #1a1a1a;
   --text-secondary: #3b3b3b;
   --text-muted: #6d6d75;
+  --text-disabled: #a6a6a6;
   --text-accent: #0b70c2;
+  --text-on-accent: #fff;
 
   --accent: #1276c1;
+  --accent-soft: rgb(18 118 193 / 12%);
   --progress-track: #d2d2d2;
+  --scrollbar-thumb: #c3c1d2;
+  --shadow-menu: 0 8px 24px rgb(0 0 0 / 14%);
+
+  --surface-notice: #fdf8ec;
+  --border-notice: #f0e3c2;
+  --text-notice: #7a5c12;
+  --surface-danger: #fdf3f2;
+  --border-danger: #f0c9c5;
+  --text-danger: #8c2f26;
+  --danger-strong: #c42b1c;
+
+  --icon-drive: #5b5b5b;
+  --icon-drive-removable: #1a86e0;
 
   --tag-red: #f5342e;
   --tag-yellow: #ffc72c;
@@ -33,4 +61,64 @@
   --folder-tab: #efa92a;
   --folder-body-top: #fddd86;
   --folder-body-bottom: #f5c64c;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --surface-sidebar: #24222c;
+  --surface-tabstrip: #201f27;
+  --surface-commandbar: #2b2a31;
+  --surface-content: #1c1b20;
+  --surface-input: #2f2e36;
+  --surface-menu: #2d2c34;
+  --surface-card: #26252c;
+  --surface-card-hover: #302f38;
+  --surface-status: #24232a;
+  --surface-hover: #34333d;
+  --surface-nav-hover: #322f3c;
+  --surface-nav-selected: #383544;
+  --surface-selected: #1e3a52;
+  --surface-selected-hover: #24455f;
+  --surface-tab-hover: rgb(255 255 255 / 8%);
+  --overlay-hover: rgb(255 255 255 / 8%);
+  --overlay-hover-strong: rgb(255 255 255 / 12%);
+
+  --border-subtle: #3a3843;
+  --border-commandbar: #35333d;
+  --border-strong: #56545f;
+  --border-menu: #3d3b47;
+  --border-status: #35333d;
+
+  --text-primary: #f2f1f5;
+  --text-secondary: #d7d5dd;
+  --text-muted: #9d9aa8;
+  --text-disabled: #6a6875;
+  --text-accent: #6cc0ff;
+  --text-on-accent: #10151a;
+
+  --accent: #4cc2ff;
+  --accent-soft: rgb(76 194 255 / 18%);
+  --progress-track: #45434f;
+  --scrollbar-thumb: #4c4a57;
+  --shadow-menu: 0 8px 24px rgb(0 0 0 / 45%);
+
+  --surface-notice: #3a3222;
+  --border-notice: #5c4d2c;
+  --text-notice: #f0cf8a;
+  --surface-danger: #3d2624;
+  --border-danger: #5f3733;
+  --text-danger: #f4a9a1;
+  --danger-strong: #e04a3a;
+
+  --icon-drive: #b6b3c0;
+  --icon-drive-removable: #5cb3ff;
+
+  --tag-red: #ff6259;
+  --tag-yellow: #ffd257;
+  --tag-blue: #4aa8ff;
+
+  --folder-tab: #d9982a;
+  --folder-body-top: #e8c877;
+  --folder-body-bottom: #d9ac45;
 }

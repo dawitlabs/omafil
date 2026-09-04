@@ -27,6 +27,10 @@ export function formatCount(count: number): string {
   return count.toLocaleString()
 }
 
+export function formatItems(count: number): string {
+  return `${formatCount(count)} ${count === 1 ? 'item' : 'items'}`
+}
+
 export function typeLabel(name: string, isDirectory: boolean): string {
   if (isDirectory) return 'File folder'
 

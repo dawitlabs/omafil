@@ -11,8 +11,22 @@ export type Tag = {
   color: string
 }
 
+export type Theme = 'system' | 'light' | 'dark'
+
+export type SortKey = 'name' | 'modified' | 'type' | 'size'
+
 export type Settings = {
   showHidden: boolean
+  theme: Theme
+  defaultSort: SortKey
+  defaultDescending: boolean
+}
+
+const defaultSettings: Settings = {
+  showHidden: false,
+  theme: 'system',
+  defaultSort: 'name',
+  defaultDescending: false,
 }
 
 type StoredState = {
@@ -40,11 +54,27 @@ class AppState {
   pins = $state<PinnedLocation[]>([])
   tags = $state<Tag[]>([])
   tagged = $state<Record<string, string[]>>({})
-  settings = $state<Settings>({ showHidden: false })
+  settings = $state<Settings>({ ...defaultSettings })
   isLoaded = $state(false)
   error = $state<string | null>(null)
 
   #saveTimer: ReturnType<typeof setTimeout> | null = null
+  #darkMedia = window.matchMedia('(prefers-color-scheme: dark)')
+
+  constructor() {
+    this.#darkMedia.addEventListener('change', () => this.applyTheme())
+    this.applyTheme()
+  }
+
+  get resolvedTheme(): 'light' | 'dark' {
+    if (this.settings.theme !== 'system') return this.settings.theme
+
+    return this.#darkMedia.matches ? 'dark' : 'light'
+  }
+
+  applyTheme() {
+    document.documentElement.dataset.theme = this.resolvedTheme
+  }
 
   async load() {
     const stored = await invoke<StoredState>('load_state')
@@ -53,8 +83,9 @@ class AppState {
     this.pins = stored.pins
     this.tags = isFirstRun ? seedTags : stored.tags
     this.tagged = stored.tagged
-    this.settings = stored.settings
+    this.settings = { ...defaultSettings, ...stored.settings }
     this.isLoaded = true
+    this.applyTheme()
 
     if (isFirstRun) await this.#seedPins()
   }
@@ -94,14 +125,24 @@ class AppState {
     return this.pins.some((pin) => pin.path === path)
   }
 
+  unpin(path: string) {
+    this.pins = this.pins.filter((pin) => pin.path !== path)
+    this.#persist()
+  }
+
   togglePin(path: string) {
     this.pins = this.isPinned(path) ? this.pins.filter((pin) => pin.path !== path) : [...this.pins, { path, label: basename(path) }]
     this.#persist()
   }
 
-  setShowHidden(showHidden: boolean) {
-    this.settings = { ...this.settings, showHidden }
+  update(changes: Partial<Settings>) {
+    this.settings = { ...this.settings, ...changes }
+    this.applyTheme()
     this.#persist()
+  }
+
+  setShowHidden(showHidden: boolean) {
+    this.update({ showHidden })
   }
 
   createTag(label: string): Tag {
@@ -112,6 +153,11 @@ class AppState {
     this.#persist()
 
     return tag
+  }
+
+  updateTag(id: string, changes: Partial<Pick<Tag, 'label' | 'color'>>) {
+    this.tags = this.tags.map((tag) => (tag.id === id ? { ...tag, ...changes } : tag))
+    this.#persist()
   }
 
   removeTag(id: string) {
