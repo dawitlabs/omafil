@@ -90,52 +90,6 @@
   background: linear-gradient(160deg, var(--folder-body-top), var(--folder-body-bottom));
 }
 
-.home-view__folder-art--desktop {
-  width: 85px;
-  height: 56px;
-  overflow: hidden;
-  border-radius: 4px;
-  background: linear-gradient(115deg, #1478e0 0%, #2e9be8 45%, #7fcdea 100%);
-}
-
-.home-view__folder-art--desktop::before {
-  inset: auto 0 0;
-  width: auto;
-  height: 9px;
-  border-radius: 0;
-  background: #bfe3f5;
-}
-
-.home-view__folder-art--desktop::after {
-  content: '';
-  position: absolute;
-  inset: auto auto 2px 4px;
-  width: 5px;
-  height: 5px;
-  border-radius: 1px;
-  background: #1478e0;
-}
-
-.home-view__desktop-dots::before,
-.home-view__desktop-dots::after {
-  content: '';
-  position: absolute;
-  left: 8px;
-  width: 8px;
-  height: 8px;
-  border-radius: 1px;
-  background: #fff;
-  opacity: 0.92;
-}
-
-.home-view__desktop-dots::before {
-  top: 8px;
-}
-
-.home-view__desktop-dots::after {
-  top: 22px;
-}
-
 .home-view__pinned-label {
   display: flex;
   align-items: center;
@@ -151,18 +105,6 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-}
-
-.home-view__tag-dot--red {
-  background: var(--tag-red);
-}
-
-.home-view__tag-dot--yellow {
-  background: var(--tag-yellow);
-}
-
-.home-view__tag-dot--blue {
-  background: var(--tag-blue);
 }
 
 .home-view__drive-grid {

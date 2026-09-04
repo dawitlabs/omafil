@@ -87,10 +87,32 @@ pub(crate) fn compare_entries(
         .then(if descending { by_key.reverse() } else { by_key })
 }
 
+pub(crate) fn describe_entry(directory_entry: &fs::DirEntry) -> Option<DirectoryEntry> {
+    let file_type = directory_entry.file_type().ok()?;
+    let metadata = directory_entry.metadata().ok();
+
+    Some(DirectoryEntry {
+        name: directory_entry.file_name().to_string_lossy().into_owned(),
+        path: directory_entry.path().to_string_lossy().into_owned(),
+        entry_type: if file_type.is_dir() {
+            DirectoryEntryType::Directory
+        } else {
+            DirectoryEntryType::File
+        },
+        size: metadata.as_ref().map_or(0, |data| data.len()),
+        modified: metadata
+            .as_ref()
+            .and_then(|data| data.modified().ok())
+            .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+            .map(|elapsed| elapsed.as_secs() as i64),
+    })
+}
+
 pub(crate) fn read_directory_entries(
     directory: &Path,
     sort: EntrySort,
     descending: bool,
+    show_hidden: bool,
 ) -> Result<(Vec<DirectoryEntry>, usize), ()> {
     let directory_entries = fs::read_dir(directory).map_err(|_| ())?;
     let mut entries = Vec::new();
@@ -99,28 +121,13 @@ pub(crate) fn read_directory_entries(
         let directory_entry = directory_entry.map_err(|_| ())?;
         let name = directory_entry.file_name().to_string_lossy().into_owned();
 
-        if name.starts_with('.') {
+        if !show_hidden && name.starts_with('.') {
             continue;
         }
 
-        let file_type = directory_entry.file_type().map_err(|_| ())?;
-        let metadata = directory_entry.metadata().ok();
-
-        entries.push(DirectoryEntry {
-            path: directory.join(&name).to_string_lossy().into_owned(),
-            name,
-            entry_type: if file_type.is_dir() {
-                DirectoryEntryType::Directory
-            } else {
-                DirectoryEntryType::File
-            },
-            size: metadata.as_ref().map_or(0, |data| data.len()),
-            modified: metadata
-                .as_ref()
-                .and_then(|data| data.modified().ok())
-                .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-                .map(|elapsed| elapsed.as_secs() as i64),
-        });
+        if let Some(entry) = describe_entry(&directory_entry) {
+            entries.push(entry);
+        }
     }
 
     entries.sort_by(|left, right| compare_entries(left, right, sort, descending));
@@ -157,10 +164,34 @@ pub(crate) fn path_crumbs(directory: &Path, roots: &[PathBuf]) -> Vec<PathCrumb>
     crumbs
 }
 
+pub(crate) fn describe_path(path: String) -> Result<DirectoryEntry, DirectoryError> {
+    let target = resolve_navigable_path(&path)?;
+    let metadata = target
+        .symlink_metadata()
+        .map_err(|_| DirectoryError::unavailable())?;
+
+    Ok(DirectoryEntry {
+        name: display_name(&target),
+        path: target.to_string_lossy().into_owned(),
+        entry_type: if metadata.is_dir() {
+            DirectoryEntryType::Directory
+        } else {
+            DirectoryEntryType::File
+        },
+        size: metadata.len(),
+        modified: metadata
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+            .map(|elapsed| elapsed.as_secs() as i64),
+    })
+}
+
 pub(crate) fn read_directory_listing(
     path: String,
     sort: EntrySort,
     descending: bool,
+    show_hidden: bool,
 ) -> Result<DirectoryListing, DirectoryError> {
     let directory = resolve_navigable_path(&path)?;
 
@@ -168,7 +199,7 @@ pub(crate) fn read_directory_listing(
         return Err(DirectoryError::unavailable());
     }
 
-    let (entries, total) = read_directory_entries(&directory, sort, descending)
+    let (entries, total) = read_directory_entries(&directory, sort, descending, show_hidden)
         .map_err(|_| DirectoryError::read_failed())?;
 
     Ok(DirectoryListing {

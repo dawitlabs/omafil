@@ -5,9 +5,10 @@
   import ContextMenu from '../ContextMenu/ContextMenu.svelte'
   import FileRow from '../FileRow/FileRow.svelte'
   import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
+  import { appState } from '../../appState.svelte'
   import { fileOperations } from '../../fileOperations.svelte'
   import { formatCount } from '../../format'
-  import { navigation } from '../../navigation.svelte'
+  import { tabs } from '../../tabs.svelte'
   import type { DirectoryEntry, EntrySort } from '../../navigation.svelte'
 
   type Band = { left: number; top: number; width: number; height: number }
@@ -18,8 +19,8 @@
   let menu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null)
   let bandOrigin: { x: number; y: number } | null = null
 
-  const entries = $derived(navigation.listing?.entries ?? [])
-  const hiddenCount = $derived((navigation.listing?.total ?? 0) - entries.length)
+  const entries = $derived(tabs.active.entries)
+  const hiddenCount = $derived(tabs.active.hiddenCount)
 
   const columns: Array<{ sort: EntrySort; label: string; className: string }> = [
     { sort: 'name', label: 'Name', className: 'file-row__name' },
@@ -58,7 +59,7 @@
       x: event.clientX,
       y: event.clientY,
       items: [
-        { kind: 'action', label: 'Open', onSelect: () => navigation.openEntry(entry) },
+        { kind: 'action', label: 'Open', onSelect: () => tabs.active.openEntry(entry) },
         { kind: 'separator' },
         { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: () => fileOperations.cutSelection() },
         { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => fileOperations.copySelection() },
@@ -71,6 +72,22 @@
           onSelect: () => fileOperations.startRenaming(entry.path),
         },
         { kind: 'action', label: 'Move to trash', shortcut: 'Del', onSelect: () => fileOperations.deleteSelection() },
+        { kind: 'separator' },
+        {
+          kind: 'action',
+          label: appState.isPinned(entry.path) ? 'Unpin from sidebar' : 'Pin to sidebar',
+          disabled: entry.entryType !== 'directory',
+          onSelect: () => appState.togglePin(entry.path),
+        },
+        ...(appState.tags.length > 0 ? [{ kind: 'heading', label: 'Tags' } as ContextMenuItem] : []),
+        ...appState.tags.map(
+          (tag): ContextMenuItem => ({
+            kind: 'toggle',
+            label: tag.label,
+            checked: appState.tagsFor(entry.path).some((assigned) => assigned.id === tag.id),
+            onSelect: () => appState.toggleTag(entry.path, tag.id),
+          }),
+        ),
       ],
     }
   }
@@ -82,11 +99,17 @@
       x: event.clientX,
       y: event.clientY,
       items: [
-        { kind: 'action', label: 'New folder', shortcut: 'Ctrl+Shift+N', onSelect: () => fileOperations.createFolder() },
+        {
+          kind: 'action',
+          label: 'New folder',
+          shortcut: 'Ctrl+Shift+N',
+          disabled: !fileOperations.directoryPath,
+          onSelect: () => fileOperations.createFolder(),
+        },
         { kind: 'separator' },
         { kind: 'action', label: 'Paste', shortcut: 'Ctrl+V', disabled: !fileOperations.canPaste, onSelect: () => fileOperations.paste() },
         { kind: 'separator' },
-        { kind: 'action', label: 'Refresh', onSelect: () => navigation.reload() },
+        { kind: 'action', label: 'Refresh', onSelect: () => tabs.active.reload() },
       ],
     }
   }
@@ -175,7 +198,7 @@
       return
     }
 
-    if (event.key === 'Enter' && entry) void navigation.openEntry(entry)
+    if (event.key === 'Enter' && entry) void tabs.active.openEntry(entry)
     else if (event.key === 'F2') fileOperations.startRenaming()
     else if (event.key === 'Delete') void fileOperations.deleteSelection()
     else if (event.key === 'Escape') fileOperations.clearSelection()
@@ -184,9 +207,9 @@
   function handleWindowKeydown(event: KeyboardEvent) {
     if (!event.altKey) return
 
-    if (event.key === 'ArrowLeft') navigation.back()
-    else if (event.key === 'ArrowRight') navigation.forward()
-    else if (event.key === 'ArrowUp') navigation.up()
+    if (event.key === 'ArrowLeft') tabs.active.back()
+    else if (event.key === 'ArrowRight') tabs.active.forward()
+    else if (event.key === 'ArrowUp') tabs.active.up()
   }
 </script>
 
@@ -201,9 +224,13 @@
   </div>
 {/if}
 
+{#if tabs.active.isSearchTruncated}
+  <p class="file-list__notice">Showing the first {formatCount(entries.length)} matches. Narrow the search to see fewer.</p>
+{/if}
+
 {#if hiddenCount > 0}
   <p class="file-list__notice">
-    Showing the first {formatCount(entries.length)} of {formatCount(navigation.listing?.total ?? 0)} items, sorted by {navigation.sort}.
+    Showing the first {formatCount(entries.length)} of {formatCount(tabs.active.total)} items, sorted by {tabs.active.sort}.
   </p>
 {/if}
 
@@ -213,15 +240,15 @@
     <button
       class="file-list__column {column.className}"
       type="button"
-      data-sort={navigation.sort === column.sort ? (navigation.descending ? 'descending' : 'ascending') : 'none'}
-      aria-label={navigation.sort === column.sort
-        ? `Sort by ${column.label}, currently ${navigation.descending ? 'descending' : 'ascending'}`
+      data-sort={tabs.active.sort === column.sort ? (tabs.active.descending ? 'descending' : 'ascending') : 'none'}
+      aria-label={tabs.active.sort === column.sort
+        ? `Sort by ${column.label}, currently ${tabs.active.descending ? 'descending' : 'ascending'}`
         : `Sort by ${column.label}`}
-      onclick={() => navigation.sortBy(column.sort)}
+      onclick={() => tabs.active.sortBy(column.sort)}
     >
       <span>{column.label}</span>
-      {#if navigation.sort === column.sort}
-        <span class="masked-icon file-list__sort-arrow" style="--icon: url({navigation.descending ? ChevronDownIcon : ChevronUpIcon})" aria-hidden="true"></span>
+      {#if tabs.active.sort === column.sort}
+        <span class="masked-icon file-list__sort-arrow" style="--icon: url({tabs.active.descending ? ChevronDownIcon : ChevronUpIcon})" aria-hidden="true"></span>
       {/if}
     </button>
   {/each}
@@ -252,7 +279,7 @@
       {index}
       isActive={index === activeIndex}
       onactivate={(event) => activateRow(entry, index, event)}
-      onopen={() => navigation.openEntry(entry)}
+      onopen={() => tabs.active.openEntry(entry)}
       onmenu={(event) => openMenuForRow(entry, index, event)}
     />
   {/each}

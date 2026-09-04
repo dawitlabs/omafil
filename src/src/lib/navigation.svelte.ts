@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { appState } from './appState.svelte'
 
 export type DirectoryEntry = {
   name: string
@@ -44,7 +45,17 @@ export const knownLocations = ['home', 'desktop', 'documents', 'downloads', 'pic
 
 export type KnownLocation = (typeof knownLocations)[number]
 
-export type View = { kind: 'home' } | { kind: 'folder'; path: string } | { kind: 'placeholder'; label: string }
+export type SearchResults = {
+  entries: DirectoryEntry[]
+  truncated: boolean
+}
+
+export type View =
+  | { kind: 'home' }
+  | { kind: 'folder'; path: string }
+  | { kind: 'search'; path: string; query: string }
+  | { kind: 'tag'; id: string; label: string }
+  | { kind: 'placeholder'; label: string }
 
 function readableError(error: unknown, fallback: string): string {
   if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
@@ -58,12 +69,13 @@ function basename(path: string): string {
   return path.split('/').filter(Boolean).at(-1) ?? path
 }
 
-class Navigation {
+export class Navigation {
   #history = $state<View[]>([{ kind: 'home' }])
   #index = $state(0)
   #requestSequence = 0
 
   listing = $state<DirectoryListing | null>(null)
+  results = $state<SearchResults | null>(null)
   isLoading = $state(false)
   error = $state<string | null>(null)
   sort = $state<EntrySort>('name')
@@ -85,6 +97,32 @@ class Navigation {
     return this.crumbs.length > 1
   }
 
+  get entries(): DirectoryEntry[] {
+    if (this.view.kind === 'folder') return this.listing?.entries ?? []
+
+    return this.results?.entries ?? []
+  }
+
+  get total(): number {
+    if (this.view.kind === 'folder') return this.listing?.total ?? 0
+
+    return this.results?.entries.length ?? 0
+  }
+
+  get hiddenCount(): number {
+    if (this.view.kind !== 'folder') return 0
+
+    return (this.listing?.total ?? 0) - (this.listing?.entries.length ?? 0)
+  }
+
+  get isSearchTruncated(): boolean {
+    return this.view.kind === 'search' && (this.results?.truncated ?? false)
+  }
+
+  get directoryPath(): string {
+    return this.view.kind === 'folder' ? (this.listing?.path ?? '') : ''
+  }
+
   get crumbs(): PathCrumb[] {
     const view = this.view
 
@@ -96,6 +134,8 @@ class Navigation {
 
     if (view.kind === 'home') return 'Home'
     if (view.kind === 'placeholder') return view.label
+    if (view.kind === 'tag') return view.label
+    if (view.kind === 'search') return `Search: ${view.query}`
 
     return basename(view.path)
   }
@@ -116,6 +156,19 @@ class Navigation {
 
   open(path: string) {
     this.#push({ kind: 'folder', path })
+  }
+
+  search(query: string) {
+    const view = this.view
+    const path = view.kind === 'search' ? view.path : this.directoryPath
+
+    if (!path) return
+
+    this.#push({ kind: 'search', path, query })
+  }
+
+  openTag(id: string, label: string) {
+    this.#push({ kind: 'tag', id, label })
   }
 
   async openLocation(location: KnownLocation) {
@@ -179,6 +232,14 @@ class Navigation {
   #push(view: View) {
     if (view.kind === 'folder' && this.isCurrentPath(view.path)) return
 
+    const current = this.view
+
+    if (view.kind === 'search' && current.kind === 'search' && current.path === view.path) {
+      this.#history = [...this.#history.slice(0, this.#index), view]
+      void this.#load()
+      return
+    }
+
     this.#history = [...this.#history.slice(0, this.#index + 1), view]
     this.#index = this.#history.length - 1
     void this.#load()
@@ -189,8 +250,9 @@ class Navigation {
     const requestId = ++this.#requestSequence
     this.error = null
 
-    if (view.kind !== 'folder') {
+    if (view.kind === 'home' || view.kind === 'placeholder') {
       this.listing = null
+      this.results = null
       this.isLoading = false
       return
     }
@@ -198,22 +260,53 @@ class Navigation {
     this.isLoading = true
 
     try {
-      const listing = await invoke<DirectoryListing>('list_directory', {
-        path: view.path,
-        sort: this.sort,
-        descending: this.descending,
-      })
+      if (view.kind === 'folder') {
+        const listing = await invoke<DirectoryListing>('list_directory', {
+          path: view.path,
+          sort: this.sort,
+          descending: this.descending,
+          showHidden: appState.settings.showHidden,
+        })
 
-      if (requestId === this.#requestSequence) this.listing = listing
+        if (requestId === this.#requestSequence) {
+          this.listing = listing
+          this.results = null
+        }
+      } else if (view.kind === 'search') {
+        const results = await invoke<SearchResults>('search_files', {
+          path: view.path,
+          query: view.query,
+          showHidden: appState.settings.showHidden,
+        })
+
+        if (requestId === this.#requestSequence) {
+          this.listing = null
+          this.results = results
+        }
+      } else {
+        const entries = await this.#describeTagged(view.id)
+
+        if (requestId === this.#requestSequence) {
+          this.listing = null
+          this.results = { entries, truncated: false }
+        }
+      }
     } catch (error) {
       if (requestId === this.#requestSequence) {
         this.listing = null
-        this.error = readableError(error, 'Unable to read this folder.')
+        this.results = null
+        this.error = readableError(error, 'Unable to read this location.')
       }
     } finally {
       if (requestId === this.#requestSequence) this.isLoading = false
     }
   }
-}
 
-export const navigation = new Navigation()
+  async #describeTagged(id: string): Promise<DirectoryEntry[]> {
+    const described = await Promise.all(
+      appState.pathsWithTag(id).map((path) => invoke<DirectoryEntry | null>('describe_path', { path }).catch(() => null)),
+    )
+
+    return described.filter((entry): entry is DirectoryEntry => entry !== null)
+  }
+}

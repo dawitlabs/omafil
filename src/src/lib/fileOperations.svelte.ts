@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import { navigation } from './navigation.svelte'
+import { tabs } from './tabs.svelte'
 import type { DirectoryEntry } from './navigation.svelte'
 
 export type ClipboardMode = 'copy' | 'cut'
@@ -36,11 +36,11 @@ class FileOperations {
   isBusy = $state(false)
 
   get entries(): DirectoryEntry[] {
-    return navigation.listing?.entries ?? []
+    return tabs.active.entries
   }
 
   get directoryPath(): string {
-    return navigation.listing?.path ?? ''
+    return tabs.active.directoryPath
   }
 
   get selectedPaths(): string[] {
@@ -130,7 +130,7 @@ class FileOperations {
 
     try {
       await operation()
-      navigation.reload()
+      tabs.active.reload()
       return true
     } catch (error) {
       this.error = readableError(error, fallback)

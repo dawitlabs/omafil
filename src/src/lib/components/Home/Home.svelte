@@ -8,17 +8,12 @@
   import PinIcon from '@fluentui/svg-icons/icons/pin_20_regular.svg?no-inline'
   import UsbStickFilledIcon from '@fluentui/svg-icons/icons/usb_stick_20_filled.svg?no-inline'
   import FileList from '../FileList/FileList.svelte'
+  import { appState } from '../../appState.svelte'
   import { fileIcon } from '../../fileIcons'
   import { fileOperations } from '../../fileOperations.svelte'
   import { formatBytes, formatCount } from '../../format'
-  import { navigation } from '../../navigation.svelte'
+  import { tabs } from '../../tabs.svelte'
   import type { DriveInfo, RecentFile } from '../../navigation.svelte'
-
-  const pinnedItems = [
-    { label: 'Desktop', type: 'desktop', tag: '', location: 'desktop' as const },
-    { label: 'Concepts', type: 'folder', tag: 'red', location: null },
-    { label: 'Code', type: 'folder', tag: 'yellow', location: null },
-  ]
 
   let drives = $state<DriveInfo[]>([])
   let isLoadingDrives = $state(true)
@@ -39,15 +34,6 @@
     if (drive.totalBytes === 0) return 0
 
     return Math.min(100, Math.max(0, ((drive.totalBytes - drive.availableBytes) / drive.totalBytes) * 100))
-  }
-
-  function openPinned(item: (typeof pinnedItems)[number]) {
-    if (item.location) {
-      void navigation.openLocation(item.location)
-      return
-    }
-
-    navigation.openPlaceholder(item.label)
   }
 
   async function loadDrives() {
@@ -85,21 +71,24 @@
 
 <div class="home-screen">
   <div class="home-view">
-    {#if navigation.view.kind === 'home'}
+    {#if tabs.active.view.kind === 'home'}
       <section class="home-view__section" aria-labelledby="pinned-heading">
         <h1 id="pinned-heading" class="home-view__heading">
           <span class="masked-icon home-view__heading-icon" style="--icon: url({PinIcon})" aria-hidden="true"></span><span>Pinned</span>
         </h1>
         <div class="home-view__pinned-grid">
-          {#each pinnedItems as item (item.label)}
-            <button class="home-view__pinned-item" type="button" onclick={() => openPinned(item)}>
-              <span class="home-view__folder-art home-view__folder-art--{item.type}" aria-hidden="true">
-                {#if item.type === 'desktop'}<span class="home-view__desktop-dots"></span>{/if}
-              </span>
+          {#each appState.pins as pin (pin.path)}
+            <button class="home-view__pinned-item" type="button" onclick={() => tabs.active.open(pin.path)}>
+              <span class="home-view__folder-art" aria-hidden="true"></span>
               <span class="home-view__pinned-label">
-                {#if item.tag}<span class="home-view__tag-dot home-view__tag-dot--{item.tag}" aria-hidden="true"></span>{/if}<span>{item.label}</span>
+                {#each appState.tagsFor(pin.path) as tag (tag.id)}
+                  <span class="home-view__tag-dot" style="background: {tag.color}" aria-hidden="true"></span>
+                {/each}
+                <span>{pin.label}</span>
               </span>
             </button>
+          {:else}
+            <p class="home-view__state">Right-click a folder and choose Pin to sidebar to see it here.</p>
           {/each}
         </div>
       </section>
@@ -120,7 +109,7 @@
         {:else}
           <div class="home-view__drive-grid">
             {#each drives as drive (drive.mountPoint)}
-              <button class="home-view__drive-card" type="button" onclick={() => navigation.open(drive.path)} aria-label={`Open ${drive.name || drive.mountPoint}`}>
+              <button class="home-view__drive-card" type="button" onclick={() => tabs.active.open(drive.path)} aria-label={`Open ${drive.name || drive.mountPoint}`}>
                 <span
                   class="masked-icon home-view__drive-icon"
                   class:home-view__drive-icon--removable={drive.isRemovable}
@@ -156,7 +145,7 @@
         {:else}
           <div class="home-view__recent-list">
             {#each recentFiles as file (file.path)}
-              <button class="home-view__recent-row" type="button" onclick={() => navigation.openExternally(file.path)}>
+              <button class="home-view__recent-row" type="button" onclick={() => tabs.active.openExternally(file.path)}>
                 <span class="masked-icon home-view__recent-icon" style="--icon: url({fileIcon(file.name).icon}); color: {fileIcon(file.name).tone}" aria-hidden="true"></span>
                 <span>{file.name}</span>
                 <span class="home-view__recent-location">{file.parentDirectory}</span>
@@ -168,19 +157,19 @@
     {:else}
       <section class="home-view__section" aria-labelledby="folder-heading">
         <h1 id="folder-heading" class="home-view__heading">
-          <span class="masked-icon home-view__heading-icon" style="--icon: url({FolderIcon})" aria-hidden="true"></span><span>{navigation.label}</span>
+          <span class="masked-icon home-view__heading-icon" style="--icon: url({FolderIcon})" aria-hidden="true"></span><span>{tabs.active.label}</span>
         </h1>
 
-        {#if navigation.view.kind === 'placeholder'}
+        {#if tabs.active.view.kind === 'placeholder'}
           <p class="home-view__state">This location is not connected yet.</p>
-        {:else if navigation.isLoading}
-          <p class="home-view__state">Loading {navigation.label}…</p>
-        {:else if navigation.error}
+        {:else if tabs.active.isLoading}
+          <p class="home-view__state">Loading {tabs.active.label}…</p>
+        {:else if tabs.active.error}
           <div class="home-view__error" role="alert">
-            <p>{navigation.error}</p>
-            <button class="home-view__retry" type="button" onclick={() => navigation.reload()}>Try again</button>
+            <p>{tabs.active.error}</p>
+            <button class="home-view__retry" type="button" onclick={() => tabs.active.reload()}>Try again</button>
           </div>
-        {:else if navigation.listing}
+        {:else}
           <FileList />
         {/if}
       </section>
@@ -188,14 +177,14 @@
   </div>
 
   <footer class="home-status" aria-label="Folder status">
-    <span>{navigation.label}</span>
+    <span>{tabs.active.label}</span>
     <span>
-      {#if navigation.view.kind === 'home'}
+      {#if tabs.active.view.kind === 'home'}
         {recentFiles.length} items
-      {:else if navigation.isLoading}
+      {:else if tabs.active.isLoading}
         Loading…
       {:else}
-        {formatCount(navigation.listing?.total ?? 0)} items{fileOperations.selectedPaths.length > 0
+        {formatCount(tabs.active.total)} items{fileOperations.selectedPaths.length > 0
           ? ` · ${fileOperations.selectedPaths.length} selected`
           : ''}
       {/if}

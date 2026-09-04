@@ -1,12 +1,13 @@
 <script lang="ts">
   import { fileOperations } from '../../fileOperations.svelte'
 
+  const inFolder = $derived(fileOperations.directoryPath !== '')
   const hasSelection = $derived(fileOperations.selectedPaths.length > 0)
   const hasSingleSelection = $derived(fileOperations.selectedPaths.length === 1)
 </script>
 
 <div class="file-commands" role="toolbar" aria-label="File commands">
-  <button class="file-commands__button" type="button" onclick={() => fileOperations.createFolder()}>New folder</button>
+  <button class="file-commands__button" type="button" disabled={!inFolder} onclick={() => fileOperations.createFolder()}>New folder</button>
   <span class="file-commands__divider" aria-hidden="true"></span>
   <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => fileOperations.cutSelection()}>Cut</button>
   <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => fileOperations.copySelection()}>Copy</button>

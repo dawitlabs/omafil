@@ -1,7 +1,9 @@
 <script lang="ts">
   export type ContextMenuItem =
     | { kind: 'separator' }
+    | { kind: 'heading'; label: string }
     | { kind: 'action'; label: string; shortcut?: string; disabled?: boolean; onSelect: () => void }
+    | { kind: 'toggle'; label: string; checked: boolean; onSelect: () => void }
 
   let {
     x,
@@ -27,8 +29,8 @@
     }
   })
 
-  function choose(item: Extract<ContextMenuItem, { kind: 'action' }>) {
-    if (item.disabled) return
+  function choose(item: Extract<ContextMenuItem, { kind: 'action' | 'toggle' }>) {
+    if (item.kind === 'action' && item.disabled) return
 
     onclose()
     item.onSelect()
@@ -46,6 +48,13 @@
   {#each items as item, index (index)}
     {#if item.kind === 'separator'}
       <hr class="context-menu__separator" />
+    {:else if item.kind === 'heading'}
+      <p class="context-menu__heading">{item.label}</p>
+    {:else if item.kind === 'toggle'}
+      <button class="context-menu__item" type="button" role="menuitemcheckbox" aria-checked={item.checked} onclick={() => choose(item)}>
+        <span>{item.label}</span>
+        <span class="context-menu__check" class:context-menu__check--on={item.checked} aria-hidden="true"></span>
+      </button>
     {:else}
       <button class="context-menu__item" type="button" role="menuitem" disabled={item.disabled} onclick={() => choose(item)}>
         <span>{item.label}</span>

@@ -4,13 +4,20 @@ mod listing;
 mod operations;
 mod paths;
 mod recent;
+mod search;
+mod store;
 
 use crate::drives::{read_drives, DriveInfo};
 use crate::error::{DirectoryError, DriveError, RecentFilesError};
-use crate::listing::{read_directory_listing, DirectoryListing, EntrySort};
+use crate::listing::{
+    describe_path as read_path_description, read_directory_listing, DirectoryEntry,
+    DirectoryListing, EntrySort,
+};
 use crate::operations::{create_directory, delete_entries, rename_entry, transfer_entries};
 use crate::paths::{known_directory_path, resolve_navigable_path};
 use crate::recent::{read_recent_files, RecentFile};
+use crate::search::{search_directory, SearchResults};
+use crate::store::{read_state, write_state, AppState, StoreError};
 
 #[tauri::command]
 async fn resolve_location(location: String) -> Result<String, DirectoryError> {
@@ -26,8 +33,11 @@ async fn list_directory(
     path: String,
     sort: EntrySort,
     descending: bool,
+    show_hidden: bool,
 ) -> Result<DirectoryListing, DirectoryError> {
-    tauri::async_runtime::spawn_blocking(move || read_directory_listing(path, sort, descending))
+    tauri::async_runtime::spawn_blocking(move || {
+        read_directory_listing(path, sort, descending, show_hidden)
+    })
         .await
         .map_err(|_| DirectoryError::read_failed())?
 }
@@ -76,6 +86,38 @@ async fn transfer_paths(
 }
 
 #[tauri::command]
+async fn describe_path(path: String) -> Result<DirectoryEntry, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || read_path_description(path))
+        .await
+        .map_err(|_| DirectoryError::unavailable())?
+}
+
+#[tauri::command]
+async fn search_files(
+    path: String,
+    query: String,
+    show_hidden: bool,
+) -> Result<SearchResults, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || search_directory(path, query, show_hidden))
+        .await
+        .map_err(|_| DirectoryError::read_failed())?
+}
+
+#[tauri::command]
+async fn load_state() -> AppState {
+    tauri::async_runtime::spawn_blocking(read_state)
+        .await
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+async fn save_state(state: AppState) -> Result<(), StoreError> {
+    tauri::async_runtime::spawn_blocking(move || write_state(state))
+        .await
+        .map_err(|_| StoreError::write_failed())?
+}
+
+#[tauri::command]
 async fn list_recent_files() -> Result<Vec<RecentFile>, RecentFilesError> {
     tauri::async_runtime::spawn_blocking(read_recent_files)
         .await
@@ -101,6 +143,10 @@ pub fn run() {
             rename_path,
             trash_paths,
             transfer_paths,
+            describe_path,
+            search_files,
+            load_state,
+            save_state,
             list_recent_files,
             list_drives
         ])

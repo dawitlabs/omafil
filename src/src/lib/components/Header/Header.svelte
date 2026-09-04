@@ -13,9 +13,60 @@
   import SettingsIcon from '@fluentui/svg-icons/icons/settings_20_regular.svg?no-inline'
   import MaximizeIcon from '@fluentui/svg-icons/icons/square_20_regular.svg?no-inline'
   import { getCurrentWindow } from '@tauri-apps/api/window'
-  import { navigation } from '../../navigation.svelte'
+  import ContextMenu from '../ContextMenu/ContextMenu.svelte'
+  import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
+  import { appState } from '../../appState.svelte'
+  import { tabs } from '../../tabs.svelte'
+
+  const SEARCH_DELAY_MS = 300
 
   const appWindow = getCurrentWindow()
+
+  let query = $state('')
+  let settingsAt = $state<{ x: number; y: number } | null>(null)
+  let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+  const active = $derived(tabs.active)
+  const canSearch = $derived(active.view.kind === 'folder' || active.view.kind === 'search')
+
+  const settingsItems: ContextMenuItem[] = $derived([
+    { kind: 'heading', label: 'Settings' },
+    {
+      kind: 'toggle',
+      label: 'Show hidden files',
+      checked: appState.settings.showHidden,
+      onSelect: () => {
+        appState.setShowHidden(!appState.settings.showHidden)
+        active.reload()
+      },
+    },
+  ])
+
+  $effect(() => {
+    const view = active.view
+
+    query = view.kind === 'search' ? view.query : ''
+  })
+
+  function runSearch(value: string) {
+    if (searchTimer) clearTimeout(searchTimer)
+
+    searchTimer = setTimeout(() => {
+      if (value.trim()) active.search(value)
+    }, SEARCH_DELAY_MS)
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent) {
+    if (!(event.ctrlKey || event.metaKey)) return
+
+    if (event.key.toLowerCase() === 't') {
+      event.preventDefault()
+      tabs.open()
+    } else if (event.key.toLowerCase() === 'w' && tabs.canClose) {
+      event.preventDefault()
+      tabs.close(tabs.activeIndex)
+    }
+  }
 
   async function minimizeWindow() {
     await appWindow.minimize()
@@ -35,21 +86,41 @@
   }
 </script>
 
+<svelte:window onkeydown={handleWindowKeydown} />
+
 <header class="app-header">
   <div class="app-header__tabbar">
-    <div class="app-header__tab app-header__tab--active" aria-current="page">
-      <span class="masked-icon app-header__tab-icon" style="--icon: url({HomeIcon})" aria-hidden="true"></span>
-      <span>{navigation.label}</span>
-      <span class="masked-icon app-header__tab-close" style="--icon: url({DismissIcon})" aria-hidden="true"></span>
+    <div class="app-header__tabs" role="tablist" aria-label="Open tabs">
+      {#each tabs.all as tab, index (tab)}
+        <div class="app-header__tab" class:app-header__tab--active={index === tabs.activeIndex}>
+          <button class="app-header__tab-select" type="button" role="tab" aria-selected={index === tabs.activeIndex} onclick={() => tabs.select(index)}>
+            <span class="masked-icon app-header__tab-icon" style="--icon: url({tab.view.kind === 'home' ? HomeIcon : FolderIcon})" aria-hidden="true"></span>
+            <span>{tab.label}</span>
+          </button>
+          {#if tabs.canClose}
+            <button class="app-header__tab-close" type="button" aria-label={`Close ${tab.label}`} onclick={() => tabs.close(index)}>
+              <span class="masked-icon" style="--icon: url({DismissIcon})" aria-hidden="true"></span>
+            </button>
+          {/if}
+        </div>
+      {/each}
     </div>
 
-    <button class="app-header__new-tab" type="button" aria-label="New tab" title="Tabs are not available yet" disabled>
+    <button class="app-header__new-tab" type="button" aria-label="New tab" title="New tab (Ctrl+T)" onclick={() => tabs.open()}>
       <span class="masked-icon app-header__icon" style="--icon: url({AddIcon})" aria-hidden="true"></span>
     </button>
 
     <div class="app-header__drag-space" data-tauri-drag-region></div>
 
-    <button class="app-header__settings-button" type="button" aria-label="Settings" title="Settings are not available yet" disabled>
+    <button
+      class="app-header__settings-button"
+      type="button"
+      aria-label="Settings"
+      onclick={(event) => {
+        const bounds = event.currentTarget.getBoundingClientRect()
+        settingsAt = { x: bounds.right - 220, y: bounds.bottom + 4 }
+      }}
+    >
       <span class="masked-icon app-header__icon" style="--icon: url({SettingsIcon})" aria-hidden="true"></span>
     </button>
 
@@ -68,40 +139,59 @@
 
   <div class="app-header__commandbar">
     <div class="app-header__navigation" aria-label="File navigation controls">
-      <button class="app-header__icon-button" type="button" aria-label="Back" onclick={() => navigation.back()} disabled={!navigation.canGoBack}>
+      <button class="app-header__icon-button" type="button" aria-label="Back" onclick={() => active.back()} disabled={!active.canGoBack}>
         <span class="masked-icon app-header__icon" style="--icon: url({ArrowLeftIcon})" aria-hidden="true"></span>
       </button>
-      <button class="app-header__icon-button" type="button" aria-label="Forward" onclick={() => navigation.forward()} disabled={!navigation.canGoForward}>
+      <button class="app-header__icon-button" type="button" aria-label="Forward" onclick={() => active.forward()} disabled={!active.canGoForward}>
         <span class="masked-icon app-header__icon" style="--icon: url({ArrowRightIcon})" aria-hidden="true"></span>
       </button>
-      <button class="app-header__icon-button" type="button" aria-label="Up" onclick={() => navigation.up()} disabled={!navigation.canGoUp}>
+      <button class="app-header__icon-button" type="button" aria-label="Up" onclick={() => active.up()} disabled={!active.canGoUp}>
         <span class="masked-icon app-header__icon" style="--icon: url({ArrowUpIcon})" aria-hidden="true"></span>
       </button>
     </div>
 
     <nav class="app-header__path" aria-label="Breadcrumb">
-      <button class="app-header__crumb" type="button" onclick={() => navigation.goHome()}>
-        <span class="masked-icon app-header__tab-icon" style="--icon: url({navigation.view.kind === 'home' ? HomeIcon : FolderIcon})" aria-hidden="true"></span>
-        <span>{navigation.view.kind === 'home' ? 'Home' : 'Files'}</span>
+      <button class="app-header__crumb" type="button" onclick={() => active.goHome()}>
+        <span class="masked-icon app-header__tab-icon" style="--icon: url({active.view.kind === 'home' ? HomeIcon : FolderIcon})" aria-hidden="true"></span>
+        <span>{active.view.kind === 'home' ? 'Home' : 'Files'}</span>
       </button>
 
-      {#each navigation.crumbs as crumb (crumb.path)}
+      {#each active.crumbs as crumb (crumb.path)}
         <span class="masked-icon app-header__crumb-separator" style="--icon: url({ChevronRightIcon})" aria-hidden="true"></span>
-        <button class="app-header__crumb" type="button" onclick={() => navigation.open(crumb.path)} aria-current={navigation.isCurrentPath(crumb.path) ? 'page' : undefined}>
+        <button class="app-header__crumb" type="button" onclick={() => active.open(crumb.path)} aria-current={active.isCurrentPath(crumb.path) ? 'page' : undefined}>
           <span>{crumb.name}</span>
         </button>
       {/each}
 
-      {#if navigation.view.kind === 'placeholder'}
+      {#if active.view.kind !== 'home' && active.view.kind !== 'folder'}
         <span class="masked-icon app-header__crumb-separator" style="--icon: url({ChevronRightIcon})" aria-hidden="true"></span>
-        <span class="app-header__crumb app-header__crumb--static">{navigation.label}</span>
+        <span class="app-header__crumb app-header__crumb--static">{active.label}</span>
       {/if}
     </nav>
 
     <label class="app-header__search">
       <span class="masked-icon app-header__icon" style="--icon: url({SearchIcon})" aria-hidden="true"></span>
-      <input type="search" placeholder="Search" aria-label="Search" title="Search is not available yet" disabled />
+      <input
+        type="search"
+        placeholder="Search"
+        aria-label="Search this folder"
+        title={canSearch ? 'Search this folder' : 'Open a folder to search'}
+        disabled={!canSearch}
+        bind:value={query}
+        oninput={() => runSearch(query)}
+        onkeydown={(event) => {
+          if (event.key === 'Enter') active.search(query)
+          else if (event.key === 'Escape') {
+            query = ''
+            if (active.view.kind === 'search') active.back()
+          }
+        }}
+      />
       <span class="masked-icon app-header__icon" style="--icon: url({MicIcon})" aria-hidden="true"></span>
     </label>
   </div>
 </header>
+
+{#if settingsAt}
+  <ContextMenu x={settingsAt.x} y={settingsAt.y} items={settingsItems} onclose={() => (settingsAt = null)} />
+{/if}

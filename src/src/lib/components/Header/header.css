@@ -10,26 +10,67 @@
 
 .app-header__tabbar {
   display: grid;
-  grid-template-columns: auto 32px minmax(0, 1fr) 34px auto;
+  grid-template-columns: minmax(0, auto) 32px minmax(0, 1fr) 34px auto;
   align-items: end;
   padding-left: 6px;
   background: var(--surface-tabstrip);
 }
 
-.app-header__tab {
+.app-header__tabs {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 148px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 6px 6px 0 0;
-  color: var(--text-primary);
-  font-size: 12px;
+  align-items: end;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.app-header__tab--active {
+.app-header__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.app-header__tab {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  width: 156px;
+  height: 28px;
+  padding-right: 6px;
+  border-radius: 6px 6px 0 0;
+  color: var(--text-muted);
+}
+
+.app-header__tab:hover {
+  background: rgb(255 255 255 / 55%);
+}
+
+.app-header__tab--active,
+.app-header__tab--active:hover {
+  color: var(--text-primary);
   background: var(--surface-commandbar);
+}
+
+.app-header__tab-select {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 10px;
+  border: 0;
+  border-radius: 6px 6px 0 0;
+  color: inherit;
+  background: transparent;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-header__tab-select > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-header__tab-icon {
@@ -38,10 +79,32 @@
 }
 
 .app-header__tab-close {
-  width: 14px;
-  height: 14px;
-  margin-left: auto;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
   color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.app-header__tab-close .masked-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.app-header__tab-close:hover {
+  background: rgb(0 0 0 / 8%);
+}
+
+.app-header__tab-select:focus-visible,
+.app-header__tab-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .app-header__new-tab,
@@ -72,9 +135,8 @@
   border-radius: 4px;
 }
 
-.app-header__settings-button:disabled {
-  opacity: 1;
-  cursor: default;
+.app-header__settings-button {
+  cursor: pointer;
 }
 
 .app-header__commandbar {
@@ -188,6 +250,10 @@
   color: var(--text-primary);
   background: transparent;
   font-size: 13px;
+}
+
+.app-header__search input:disabled {
+  cursor: default;
 }
 
 .app-header__search input::placeholder {

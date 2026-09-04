@@ -15,8 +15,12 @@
   import TagIcon from '@fluentui/svg-icons/icons/tag_20_regular.svg?no-inline'
   import UsbStickIcon from '@fluentui/svg-icons/icons/usb_stick_20_regular.svg?no-inline'
   import VideoIcon from '@fluentui/svg-icons/icons/video_20_regular.svg?no-inline'
-  import { knownLocations, navigation } from '../../navigation.svelte'
+  import ContextMenu from '../ContextMenu/ContextMenu.svelte'
+  import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
+  import { appState } from '../../appState.svelte'
+  import { knownLocations } from '../../navigation.svelte'
   import type { DriveInfo, KnownLocation } from '../../navigation.svelte'
+  import { tabs } from '../../tabs.svelte'
 
   type LocationItem = {
     location: KnownLocation
@@ -24,14 +28,8 @@
     icon: string
   }
 
-  const pinnedItems: LocationItem[] = [{ location: 'desktop', label: 'Desktop', icon: DesktopIcon }]
-
-  const pinnedPlaceholders = [
-    { label: 'Concepts', icon: FolderIcon },
-    { label: 'Code', icon: FolderIcon },
-  ]
-
   const fileItems: LocationItem[] = [
+    { location: 'desktop', label: 'Desktop', icon: DesktopIcon },
     { location: 'downloads', label: 'Downloads', icon: DownloadIcon },
     { location: 'documents', label: 'Documents', icon: DocumentIcon },
     { location: 'pictures', label: 'Pictures', icon: ImageIcon },
@@ -39,26 +37,37 @@
     { location: 'music', label: 'Music', icon: MusicIcon },
   ]
 
-  const tags = [
-    { label: 'Design', color: 'red' },
-    { label: 'Dev', color: 'yellow' },
-    { label: 'School', color: 'blue' },
-  ]
-
   let drives = $state<DriveInfo[]>([])
   let drivesError = $state(false)
   let locationPaths = $state<Partial<Record<KnownLocation, string>>>({})
+  let newTagLabel = $state<string | null>(null)
+  let menu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null)
 
-  function isPlaceholderActive(label: string): boolean {
-    const view = navigation.view
-
-    return view.kind === 'placeholder' && view.label === label
-  }
+  const active = $derived(tabs.active)
 
   function isLocationActive(location: KnownLocation): boolean {
     const path = locationPaths[location]
 
-    return path !== undefined && navigation.isCurrentPath(path)
+    return path !== undefined && active.isCurrentPath(path)
+  }
+
+  function isTagActive(id: string): boolean {
+    const view = active.view
+
+    return view.kind === 'tag' && view.id === id
+  }
+
+  function openMenu(event: MouseEvent, items: ContextMenuItem[]) {
+    event.preventDefault()
+    menu = { x: event.clientX, y: event.clientY, items }
+  }
+
+  function commitNewTag() {
+    const label = (newTagLabel ?? '').trim()
+
+    if (label) appState.createTag(label)
+
+    newTagLabel = null
   }
 
   async function loadDrives() {
@@ -101,10 +110,10 @@
   <nav class="file-sidebar__primary-nav" aria-label="Primary navigation">
     <button
       class="file-sidebar__item"
-      class:file-sidebar__item--active={navigation.view.kind === 'home'}
+      class:file-sidebar__item--active={active.view.kind === 'home'}
       type="button"
-      aria-current={navigation.view.kind === 'home' ? 'page' : undefined}
-      onclick={() => navigation.goHome()}
+      aria-current={active.view.kind === 'home' ? 'page' : undefined}
+      onclick={() => active.goHome()}
     >
       <span class="masked-icon file-sidebar__icon" style="--icon: url({HomeFilledIcon})" aria-hidden="true"></span>
       <span>Home</span>
@@ -117,29 +126,21 @@
       <span>Pinned</span>
     </h2>
     <nav class="file-sidebar__nav" aria-label="Pinned locations">
-      {#each pinnedItems as item (item.location)}
+      {#each appState.pins as pin (pin.path)}
         <button
           class="file-sidebar__item"
-          class:file-sidebar__item--active={isLocationActive(item.location)}
+          class:file-sidebar__item--active={active.isCurrentPath(pin.path)}
           type="button"
-          aria-current={isLocationActive(item.location) ? 'page' : undefined}
-          onclick={() => navigation.openLocation(item.location)}
+          aria-current={active.isCurrentPath(pin.path) ? 'page' : undefined}
+          onclick={() => active.open(pin.path)}
+          oncontextmenu={(event) =>
+            openMenu(event, [{ kind: 'action', label: 'Unpin from sidebar', onSelect: () => appState.togglePin(pin.path) }])}
         >
-          <span class="masked-icon file-sidebar__icon" style="--icon: url({item.icon})" aria-hidden="true"></span>
-          <span>{item.label}</span>
+          <span class="masked-icon file-sidebar__icon" style="--icon: url({FolderIcon})" aria-hidden="true"></span>
+          <span>{pin.label}</span>
         </button>
-      {/each}
-      {#each pinnedPlaceholders as item (item.label)}
-        <button
-          class="file-sidebar__item"
-          class:file-sidebar__item--active={isPlaceholderActive(item.label)}
-          type="button"
-          aria-current={isPlaceholderActive(item.label) ? 'page' : undefined}
-          onclick={() => navigation.openPlaceholder(item.label)}
-        >
-          <span class="masked-icon file-sidebar__icon" style="--icon: url({item.icon})" aria-hidden="true"></span>
-          <span>{item.label}</span>
-        </button>
+      {:else}
+        <span class="file-sidebar__empty-state">Right-click a folder to pin it</span>
       {/each}
     </nav>
   </section>
@@ -156,7 +157,7 @@
           class:file-sidebar__item--active={isLocationActive(item.location)}
           type="button"
           aria-current={isLocationActive(item.location) ? 'page' : undefined}
-          onclick={() => navigation.openLocation(item.location)}
+          onclick={() => active.openLocation(item.location)}
         >
           <span class="masked-icon file-sidebar__icon" style="--icon: url({item.icon})" aria-hidden="true"></span>
           <span>{item.label}</span>
@@ -179,10 +180,10 @@
         {#each drives as drive (drive.mountPoint)}
           <button
             class="file-sidebar__item"
-            class:file-sidebar__item--active={navigation.isCurrentPath(drive.path)}
+            class:file-sidebar__item--active={active.isCurrentPath(drive.path)}
             type="button"
-            aria-current={navigation.isCurrentPath(drive.path) ? 'page' : undefined}
-            onclick={() => navigation.open(drive.path)}
+            aria-current={active.isCurrentPath(drive.path) ? 'page' : undefined}
+            onclick={() => active.open(drive.path)}
           >
             <span class="masked-icon file-sidebar__icon" style="--icon: url({drive.isRemovable ? UsbStickIcon : HardDriveIcon})" aria-hidden="true"></span>
             <span>{drive.name || drive.mountPoint}</span>
@@ -198,28 +199,49 @@
       <span>Tags</span>
     </h2>
     <nav class="file-sidebar__nav" aria-label="Tags">
-      {#each tags as tag (tag.label)}
+      {#each appState.tags as tag (tag.id)}
         <button
           class="file-sidebar__item"
-          class:file-sidebar__item--active={isPlaceholderActive(tag.label)}
+          class:file-sidebar__item--active={isTagActive(tag.id)}
           type="button"
-          aria-current={isPlaceholderActive(tag.label) ? 'page' : undefined}
-          onclick={() => navigation.openPlaceholder(tag.label)}
+          aria-current={isTagActive(tag.id) ? 'page' : undefined}
+          onclick={() => active.openTag(tag.id, tag.label)}
+          oncontextmenu={(event) =>
+            openMenu(event, [{ kind: 'action', label: `Delete “${tag.label}”`, onSelect: () => appState.removeTag(tag.id) }])}
         >
-          <span class="file-sidebar__tag-dot file-sidebar__tag-dot--{tag.color}" aria-hidden="true"></span>
+          <span class="file-sidebar__tag-dot" style="background: {tag.color}" aria-hidden="true"></span>
           <span>{tag.label}</span>
         </button>
       {/each}
-      <button
-        class="file-sidebar__item"
-        class:file-sidebar__item--active={isPlaceholderActive('Create new tag')}
-        type="button"
-        aria-current={isPlaceholderActive('Create new tag') ? 'page' : undefined}
-        onclick={() => navigation.openPlaceholder('Create new tag')}
-      >
-        <span class="masked-icon file-sidebar__icon" style="--icon: url({AddIcon})" aria-hidden="true"></span>
-        <span>Create new tag</span>
-      </button>
+
+      {#if newTagLabel === null}
+        <button class="file-sidebar__item" type="button" onclick={() => (newTagLabel = '')}>
+          <span class="masked-icon file-sidebar__icon" style="--icon: url({AddIcon})" aria-hidden="true"></span>
+          <span>Create new tag</span>
+        </button>
+      {:else}
+        <div class="file-sidebar__item file-sidebar__item--editing">
+          <span class="masked-icon file-sidebar__icon" style="--icon: url({TagIcon})" aria-hidden="true"></span>
+          <!-- svelte-ignore a11y_autofocus -->
+          <input
+            class="file-sidebar__tag-input"
+            type="text"
+            autofocus
+            aria-label="New tag name"
+            placeholder="Tag name"
+            bind:value={newTagLabel}
+            onblur={commitNewTag}
+            onkeydown={(event) => {
+              if (event.key === 'Enter') commitNewTag()
+              else if (event.key === 'Escape') newTagLabel = null
+            }}
+          />
+        </div>
+      {/if}
     </nav>
   </section>
 </aside>
+
+{#if menu}
+  <ContextMenu x={menu.x} y={menu.y} items={menu.items} onclose={() => (menu = null)} />
+{/if}
