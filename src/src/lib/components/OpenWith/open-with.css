@@ -3,7 +3,11 @@
 .open-with__state--error { color: var(--text-danger); }
 
 .open-with__list { max-height: 320px; margin: 0; padding: 6px 8px 12px; overflow-y: auto; list-style: none; }
-.open-with__app { display: flex; width: 100%; height: 36px; align-items: center; justify-content: space-between; padding: 0 10px; border: 0; border-radius: 4px; color: var(--text-primary); background: transparent; font-size: 13px; text-align: left; cursor: pointer; }
+.open-with__row { display: flex; align-items: center; gap: 4px; }
+.open-with__app { display: flex; flex: 1; min-width: 0; height: 36px; align-items: center; padding: 0 10px; border: 0; border-radius: 4px; color: var(--text-primary); background: transparent; font-size: 13px; text-align: left; cursor: pointer; }
 .open-with__app:hover { background: var(--surface-hover); }
 .open-with__app:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.open-with__default { color: var(--text-muted); font-size: 11px; }
+.open-with__default { padding: 0 10px; color: var(--text-muted); font-size: 11px; }
+.open-with__make-default { height: 26px; padding: 0 8px; border: 1px solid var(--border-subtle); border-radius: 4px; color: var(--text-muted); background: transparent; font-size: 11px; cursor: pointer; }
+.open-with__make-default:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.open-with__make-default:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

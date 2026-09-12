@@ -90,6 +90,31 @@ fn execute(
     update
 }
 
+/// A finished or failed job is easy to miss while another window has focus.
+fn notify_if_unfocused(app: &AppHandle, update: &OperationUpdate) {
+    use tauri::Manager;
+
+    let focused = app
+        .get_webview_window("main")
+        .and_then(|window| window.is_focused().ok())
+        .unwrap_or(true);
+    let (title, body) = match update.state {
+        OperationState::Completed => (format!("{} finished", capitalize(update.kind)), format!("{} items", update.total_items)),
+        OperationState::Failed => (format!("{} failed", capitalize(update.kind)), update.error.clone().unwrap_or_default()),
+        _ => return,
+    };
+    if focused {
+        return;
+    }
+    let argv = vec!["notify-send".to_owned(), "--app-name=omafil".to_owned(), "--icon=omafil".to_owned(), title, body];
+    let _ = crate::launch::spawn_first(&[argv], std::path::Path::new("/"), "notify-send unavailable");
+}
+
+fn capitalize(word: &str) -> String {
+    let mut chars = word.chars();
+    chars.next().map(|first| first.to_uppercase().collect::<String>() + chars.as_str()).unwrap_or_default()
+}
+
 impl Default for OperationQueue {
     fn default() -> Self {
         let (sender, receiver) = mpsc::channel::<Job>();
@@ -104,6 +129,7 @@ impl Default for OperationQueue {
                     .lock()
                     .unwrap_or_else(|poison| poison.into_inner())
                     .remove(&final_update.id);
+                notify_if_unfocused(&job.app, &final_update);
                 let _ = job.app.emit(EVENT_NAME, final_update);
             }
         });

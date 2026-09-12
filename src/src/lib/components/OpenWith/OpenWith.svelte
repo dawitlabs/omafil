@@ -34,6 +34,17 @@
     if (!isLoading) list?.querySelector('button')?.focus()
   })
 
+  async function makeDefault(id: string) {
+    error = null
+
+    try {
+      await invoke('set_default_opener', { path, desktopId: id })
+      openers = openers.map((opener) => ({ ...opener, isDefault: opener.id === id })).sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name))
+    } catch (caught) {
+      error = readableError(caught, 'Unable to change the default app.')
+    }
+  }
+
   async function launch(id: string) {
     error = null
 
@@ -69,11 +80,13 @@
     {:else}
       <ul class="open-with__list" bind:this={list}>
         {#each openers as opener (opener.id)}
-          <li>
-            <button type="button" class="open-with__app" onclick={() => launch(opener.id)}>
-              <span>{opener.name}</span>
-              {#if opener.isDefault}<span class="open-with__default">Default</span>{/if}
-            </button>
+          <li class="open-with__row">
+            <button type="button" class="open-with__app" onclick={() => launch(opener.id)}>{opener.name}</button>
+            {#if opener.isDefault}
+              <span class="open-with__default">Default</span>
+            {:else}
+              <button type="button" class="open-with__make-default" onclick={() => makeDefault(opener.id)}>Make default</button>
+            {/if}
           </li>
         {/each}
       </ul>

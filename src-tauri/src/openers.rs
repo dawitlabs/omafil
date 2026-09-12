@@ -136,6 +136,19 @@ pub(crate) fn list_openers(path: String) -> Result<Vec<Opener>, DirectoryError> 
     Ok(openers)
 }
 
+pub(crate) fn set_default_opener(path: String, desktop_id: String) -> Result<(), DirectoryError> {
+    let target = resolve_navigable_path(&path)?;
+    find_entry(&desktop_id).ok_or_else(|| DirectoryError::detail("That app is no longer installed."))?;
+    let mime = xdg_mime(&["query", "filetype", &target.to_string_lossy()])
+        .ok_or_else(|| DirectoryError::detail("Unable to determine this file's type."))?;
+    let applied = Command::new("xdg-mime").args(["default", &desktop_id, &mime]).status();
+
+    match applied {
+        Ok(status) if status.success() => Ok(()),
+        _ => Err(DirectoryError::detail("Unable to change the default app.")),
+    }
+}
+
 pub(crate) fn open_with(path: String, desktop_id: String) -> Result<(), DirectoryError> {
     let target = resolve_navigable_path(&path)?;
     let entry = find_entry(&desktop_id).ok_or_else(|| DirectoryError::detail("That app is no longer installed."))?;

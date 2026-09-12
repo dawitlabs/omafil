@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte'
   import { appState } from '../../appState.svelte'
-  import { convertFileSrc } from '@tauri-apps/api/core'
+  import { convertFileSrc, invoke } from '@tauri-apps/api/core'
   import { fileIcon, folderIcon } from '../../fileIcons'
   import { fileOperations } from '../../fileOperations.svelte'
   import { formatBytes, formatModified, parentFolder, typeLabel } from '../../format'
@@ -37,7 +37,20 @@
   const icon = $derived(isDirectory ? folderIcon : fileIcon(entry.name))
   const isRenaming = $derived(fileOperations.renamingPath === entry.path)
   const imageFile = $derived(/\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(entry.name))
-  const thumbnailSource = $derived(imageFile ? convertFileSrc(entry.path) : null)
+  let pdfThumbnail = $state<string | null>(null)
+  const thumbnailSource = $derived(imageFile ? convertFileSrc(entry.path) : pdfThumbnail)
+
+  $effect(() => {
+    pdfThumbnail = null
+    if (!previewMode || !/\.pdf$/i.test(entry.name)) return
+    const target = entry.path
+
+    invoke<string>('pdf_preview', { path: target })
+      .then((rendered) => {
+        if (entry.path === target) pdfThumbnail = convertFileSrc(rendered)
+      })
+      .catch(() => undefined)
+  })
   let renameInput = $state<HTMLInputElement | null>(null)
 
   $effect(() => {

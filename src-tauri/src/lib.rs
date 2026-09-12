@@ -1,5 +1,6 @@
 mod drives;
 mod archive;
+mod diagnostics;
 mod error;
 mod inspect;
 mod launch;
@@ -10,6 +11,7 @@ mod operations;
 mod operation_queue;
 mod operation_io;
 mod paths;
+mod preview;
 mod recent;
 mod recycle;
 mod search;
@@ -115,6 +117,27 @@ async fn eject_drive(device: String) -> Result<(), DirectoryError> {
     tauri::async_runtime::spawn_blocking(move || drives::eject_drive(&device))
         .await
         .map_err(|_| DirectoryError::operation_failed())?
+}
+
+#[tauri::command]
+async fn set_default_opener(path: String, desktop_id: String) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || openers::set_default_opener(path, desktop_id))
+        .await
+        .map_err(|_| DirectoryError::open_failed())?
+}
+
+#[tauri::command]
+async fn pdf_preview(path: String) -> Result<String, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || preview::pdf_preview(path))
+        .await
+        .map_err(|_| DirectoryError::read_failed())?
+}
+
+#[tauri::command]
+fn report_client_error(message: String, detail: Option<String>) {
+    if let Some(path) = diagnostics::log_path() {
+        diagnostics::append(&path, "client_error", &message, detail.as_deref());
+    }
 }
 
 #[tauri::command]
@@ -319,6 +342,7 @@ async fn list_drives() -> Result<Vec<DriveInfo>, DriveError> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    diagnostics::install_panic_hook();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -353,6 +377,9 @@ pub fn run() {
             open_in_editor,
             list_openers,
             open_with,
+            set_default_opener,
+            pdf_preview,
+            report_client_error,
             mount_drive,
             unmount_drive,
             eject_drive,

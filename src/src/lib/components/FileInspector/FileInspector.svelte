@@ -71,6 +71,19 @@
   const isFolder = $derived(inspection?.entryType === 'folder')
   const icon = $derived(inspection ? (isFolder ? { icon: FolderIcon, tone: 'var(--folder-body-bottom)' } : fileIcon(inspection.name)) : null)
   const mediaSource = $derived(inspection?.mediaType ? convertFileSrc(inspection.path) : null)
+  let pdfPreview = $state<string | null>(null)
+
+  $effect(() => {
+    pdfPreview = null
+    if (inspection?.mediaType !== 'application/pdf') return
+    const target = inspection.path
+
+    invoke<string>('pdf_preview', { path: target })
+      .then((rendered) => {
+        if (inspection?.path === target) pdfPreview = convertFileSrc(rendered)
+      })
+      .catch(() => undefined)
+  })
 </script>
 
 {#if mode === 'properties'}
@@ -134,8 +147,8 @@
         {#if inspection.previewTruncated}<p class="file-inspector__state">Showing the first 48 KB.</p>{/if}
       {:else if mediaSource && inspection.mediaType?.startsWith('image/')}
         <img class="file-inspector__media-preview" src={mediaSource} alt={`Preview of ${inspection.name}`} />
-      {:else if mediaSource && inspection.mediaType === 'application/pdf'}
-        <iframe class="file-inspector__media-preview" title={`Preview of ${inspection.name}`} src={mediaSource}></iframe>
+      {:else if inspection.mediaType === 'application/pdf' && pdfPreview}
+        <img class="file-inspector__media-preview" src={pdfPreview} alt={`First page of ${inspection.name}`} />
       {:else if mediaSource && inspection.mediaType?.startsWith('audio/')}
         <audio class="file-inspector__media-preview" controls src={mediaSource}></audio>
       {:else if mediaSource && inspection.mediaType?.startsWith('video/')}
