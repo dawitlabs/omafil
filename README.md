@@ -49,4 +49,6 @@ o.bind("SUPER + SHIFT + F", "File manager", { launch = "omafil" })
 o.bind("SUPER + ALT + SHIFT + F", "File manager (cwd)", { launch = "sh -c 'omafil \"$(omarchy-cmd-terminal-cwd)\"'" })
 ```
 
-`make uninstall` removes it again.
+`make uninstall` removes it again. Arch users can build `packaging/PKGBUILD` with `makepkg -si`.
+
+CI runs the tests on every push and attaches an AppImage and a .deb to tagged `v*` releases.
