@@ -1,5 +1,7 @@
 # omafil
 
+[![ci](https://github.com/dawitlabs/omafil/actions/workflows/ci.yml/badge.svg)](https://github.com/dawitlabs/omafil/actions/workflows/ci.yml)
+
 A fast file manager for [Omarchy](https://omarchy.org). Tauri 2, Rust and Svelte 5.
 
 ## What makes it Omarchy's
