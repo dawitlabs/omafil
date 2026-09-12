@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Omafil
+GenericName=File Manager
+Comment=Fast file manager that follows your Omarchy theme
+Exec=omafil %u
+Icon=omafil
+Terminal=false
+Categories=System;FileTools;FileManager;
+MimeType=inode/directory;
+StartupWMClass=omafil
