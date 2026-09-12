@@ -10,7 +10,7 @@
 
 .app-header__tabbar {
   display: grid;
-  grid-template-columns: minmax(0, auto) 32px minmax(0, 1fr) 34px auto;
+  grid-template-columns: minmax(0, auto) 32px minmax(0, 1fr) 34px 34px auto;
   align-items: end;
   padding-left: 6px;
   background: var(--surface-tabstrip);

@@ -231,6 +231,9 @@
 }
 
 .home-view__listing { position: relative; }
+.home-view__panes--split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 16px; }
+.home-view__panes--split .home-view__pane { min-width: 0; padding-top: 6px; border-top: 2px solid var(--border-subtle); }
+.home-view__panes--split .home-view__pane--focused { border-top-color: var(--accent); }
 .home-view__load-more { display: flex; justify-content: center; padding: 14px; border-top: 1px solid var(--border-subtle); }
 .home-view__loading-overlay { position: absolute; z-index: 3; top: 0; right: 0; padding: 6px 10px; border: 1px solid var(--border-subtle); border-radius: 4px; color: var(--text-muted); background: var(--surface-content); box-shadow: var(--shadow-menu); font-size: 12px; }
 
@@ -303,3 +306,5 @@
 .home-view__drive-card--unmounted strong { color: var(--text-secondary); }
 .home-view__drive-hint { color: var(--text-accent); }
 .home-view__state--error { color: var(--text-danger); }
+.home-view__panes--split :is(.file-list__columns, .file-row) { grid-template-columns: 20px minmax(120px, 1fr) 130px 80px; }
+.home-view__panes--split .file-row__kind { display: none; }

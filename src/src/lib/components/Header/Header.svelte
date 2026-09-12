@@ -11,6 +11,7 @@
   import MinimizeIcon from '@fluentui/svg-icons/icons/subtract_20_regular.svg?no-inline'
   import SearchIcon from '@fluentui/svg-icons/icons/search_20_regular.svg?no-inline'
   import SettingsIcon from '@fluentui/svg-icons/icons/settings_20_regular.svg?no-inline'
+  import SplitIcon from '@fluentui/svg-icons/icons/layout_column_two_20_regular.svg?no-inline'
   import MaximizeIcon from '@fluentui/svg-icons/icons/square_20_regular.svg?no-inline'
   import { getCurrentWindow } from '@tauri-apps/api/window'
   import { tabs } from '../../tabs.svelte'
@@ -51,6 +52,12 @@
     if (event.key === 'F5') {
       event.preventDefault()
       active.reload()
+      return
+    }
+
+    if (event.key === 'F6') {
+      event.preventDefault()
+      tabs.focusOtherPane()
       return
     }
 
@@ -129,6 +136,18 @@
 
     <div class="app-header__drag-space" data-tauri-drag-region></div>
 
+    <button
+      class="app-header__settings-button"
+      class:app-header__settings-button--active={tabs.isSplit}
+      type="button"
+      aria-pressed={tabs.isSplit}
+      aria-label={tabs.isSplit ? 'Close split pane' : 'Split into two panes'}
+      title={tabs.isSplit ? 'Close split pane' : 'Split into two panes (F6 switches panes)'}
+      disabled={!tabs.isSplit && active.view.kind !== 'folder'}
+      onclick={() => tabs.toggleSplit()}
+    >
+      <span class="masked-icon app-header__icon" style="--icon: url({SplitIcon})" aria-hidden="true"></span>
+    </button>
     <button
       class="app-header__settings-button"
       class:app-header__settings-button--active={active.view.kind === 'settings'}

@@ -70,6 +70,8 @@ function basename(path: string): string {
 }
 
 export class Navigation {
+  /** Second pane shown beside this one while the tab is split. */
+  split = $state<Navigation | null>(null)
   #history = $state<View[]>([{ kind: 'home' }])
   #index = $state(0)
   #requestSequence = 0

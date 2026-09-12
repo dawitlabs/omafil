@@ -213,7 +213,10 @@
         {:else}
           {#if tabs.active.entries.length > 0 || !tabs.active.isLoading}
             <div class="home-view__listing">
-              <FileList />
+              <div class="home-view__panes" class:home-view__panes--split={tabs.tab.split !== null}>
+                <div class="home-view__pane" class:home-view__pane--focused={tabs.tab.split !== null && tabs.active === tabs.tab}><FileList navigation={tabs.tab} /></div>
+                {#if tabs.tab.split}<div class="home-view__pane" class:home-view__pane--focused={tabs.active === tabs.tab.split}><FileList navigation={tabs.tab.split} /></div>{/if}
+              </div>
               {#if tabs.active.hasMoreEntries}
                 <div class="home-view__load-more">
                   <button class="file-commands__button" type="button" disabled={tabs.active.isLoadingMore} onclick={() => tabs.active.loadMore()}>

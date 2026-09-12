@@ -9,7 +9,9 @@
   import { fileOperations } from '../../fileOperations.svelte'
   import { formatCount } from '../../format'
   import { tabs } from '../../tabs.svelte'
-  import type { DirectoryEntry, EntrySort } from '../../navigation.svelte'
+  import type { DirectoryEntry, EntrySort, Navigation } from '../../navigation.svelte'
+
+  let { navigation }: { navigation: Navigation } = $props()
 
   type Band = { left: number; top: number; width: number; height: number }
 
@@ -21,12 +23,12 @@
   let typeAhead = ''
   let typeAheadTimer: ReturnType<typeof setTimeout> | null = null
 
-  const entries = $derived(tabs.active.entries)
-  const hiddenCount = $derived(tabs.active.hiddenCount)
+  const entries = $derived(navigation.entries)
+  const hiddenCount = $derived(navigation.hiddenCount)
 
   // Sorting is a property of a directory listing; search and tag results come
   // back in walk order, so their headers are labels rather than controls.
-  const isSortable = $derived(tabs.active.view.kind === 'folder')
+  const isSortable = $derived(navigation.view.kind === 'folder')
 
   const columns = $derived(
     isSortable
@@ -74,9 +76,9 @@
       x: event.clientX,
       y: event.clientY,
       items: [
-        { kind: 'action', label: 'Open', onSelect: () => tabs.active.openEntry(entry) },
-        ...(entry.entryType === 'file' ? [{ kind: 'action', label: 'Edit', onSelect: () => tabs.active.openInEditor(entry.path) } as ContextMenuItem, { kind: 'action', label: 'Open with…', onSelect: () => fileOperations.showOpenWith(entry.path) } as ContextMenuItem] : []),
-        { kind: 'action', label: entry.entryType === 'directory' ? 'Open in terminal' : 'Open folder in terminal', shortcut: 'F4', onSelect: () => tabs.active.openTerminal(entry.path) },
+        { kind: 'action', label: 'Open', onSelect: () => navigation.openEntry(entry) },
+        ...(entry.entryType === 'file' ? [{ kind: 'action', label: 'Edit', onSelect: () => navigation.openInEditor(entry.path) } as ContextMenuItem, { kind: 'action', label: 'Open with…', onSelect: () => fileOperations.showOpenWith(entry.path) } as ContextMenuItem] : []),
+        { kind: 'action', label: entry.entryType === 'directory' ? 'Open in terminal' : 'Open folder in terminal', shortcut: 'F4', onSelect: () => navigation.openTerminal(entry.path) },
         { kind: 'separator' },
         { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: () => fileOperations.cutSelection() },
         { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => fileOperations.copySelection() },
@@ -136,8 +138,8 @@
         { kind: 'separator' },
         { kind: 'action', label: 'Paste', shortcut: 'Ctrl+V', disabled: !fileOperations.canPaste, onSelect: () => fileOperations.paste() },
         { kind: 'separator' },
-        { kind: 'action', label: 'Open in terminal', shortcut: 'F4', disabled: !fileOperations.directoryPath, onSelect: () => tabs.active.openTerminal() },
-        { kind: 'action', label: 'Refresh', onSelect: () => tabs.active.reload() },
+        { kind: 'action', label: 'Open in terminal', shortcut: 'F4', disabled: !fileOperations.directoryPath, onSelect: () => navigation.openTerminal() },
+        { kind: 'action', label: 'Refresh', onSelect: () => navigation.reload() },
       ],
     }
   }
@@ -249,12 +251,12 @@
 
       if (event.key === 'h') {
         event.preventDefault()
-        tabs.active.up()
+        navigation.up()
         return
       }
       if (event.key === 'l' && entry) {
         event.preventDefault()
-        void tabs.active.openEntry(entry)
+        void navigation.openEntry(entry)
         return
       }
       if (event.key === 'g' || event.key === '/') return
@@ -268,16 +270,17 @@
 
     if (event.key === 'F5') {
       event.preventDefault()
-      tabs.active.reload()
+      navigation.reload()
     }
     else if (event.key === 'Backspace') {
       event.preventDefault()
-      tabs.active.up()
+      navigation.up()
     }
     else if (event.altKey && event.key === 'Enter') fileOperations.showProperties()
-    else if (event.key === 'Enter' && entry) void tabs.active.openEntry(entry)
+    else if (event.key === 'Enter' && entry) void navigation.openEntry(entry)
     else if (event.key === 'F2') fileOperations.startRenaming()
-    else if (event.key === 'F4') void tabs.active.openTerminal()
+    else if (event.key === 'F4') void navigation.openTerminal()
+    else if (event.key === 'F6') tabs.focusOtherPane()
     else if (event.shiftKey && event.key === 'Delete') fileOperations.requestPermanentDelete()
     else if (event.key === 'Delete') void fileOperations.deleteSelection()
     else if (event.key === 'Escape') fileOperations.clearSelection()
@@ -311,9 +314,9 @@
   function handleWindowKeydown(event: KeyboardEvent) {
     if (!event.altKey) return
 
-    if (event.key === 'ArrowLeft') tabs.active.back()
-    else if (event.key === 'ArrowRight') tabs.active.forward()
-    else if (event.key === 'ArrowUp') tabs.active.up()
+    if (event.key === 'ArrowLeft') navigation.back()
+    else if (event.key === 'ArrowRight') navigation.forward()
+    else if (event.key === 'ArrowUp') navigation.up()
   }
 </script>
 
@@ -328,20 +331,20 @@
   </div>
 {/if}
 
-{#if tabs.active.missingTagged > 0}
+{#if navigation.missingTagged > 0}
   <p class="file-list__notice">
-    {formatCount(tabs.active.missingTagged)}
-    tagged {tabs.active.missingTagged === 1 ? 'item is' : 'items are'} not reachable right now, so they are not listed.
+    {formatCount(navigation.missingTagged)}
+    tagged {navigation.missingTagged === 1 ? 'item is' : 'items are'} not reachable right now, so they are not listed.
   </p>
 {/if}
 
-{#if tabs.active.isSearchTruncated}
+{#if navigation.isSearchTruncated}
   <p class="file-list__notice">Showing the first {formatCount(entries.length)} matches. Narrow the search to see fewer.</p>
 {/if}
 
 {#if hiddenCount > 0}
   <p class="file-list__notice">
-    Showing the first {formatCount(entries.length)} of {formatCount(tabs.active.total)} items, sorted by {tabs.active.sort}.
+    Showing the first {formatCount(entries.length)} of {formatCount(navigation.total)} items, sorted by {navigation.sort}.
   </p>
 {/if}
 
@@ -353,15 +356,15 @@
       <button
         class="file-list__column {column.className}"
         type="button"
-        data-sort={tabs.active.sort === column.sort ? (tabs.active.descending ? 'descending' : 'ascending') : 'none'}
-        aria-label={tabs.active.sort === column.sort
-          ? `Sort by ${column.label}, currently ${tabs.active.descending ? 'descending' : 'ascending'}`
+        data-sort={navigation.sort === column.sort ? (navigation.descending ? 'descending' : 'ascending') : 'none'}
+        aria-label={navigation.sort === column.sort
+          ? `Sort by ${column.label}, currently ${navigation.descending ? 'descending' : 'ascending'}`
           : `Sort by ${column.label}`}
-        onclick={() => tabs.active.sortBy(column.sort)}
+        onclick={() => navigation.sortBy(column.sort)}
       >
         <span>{column.label}</span>
-        {#if tabs.active.sort === column.sort}
-          <span class="masked-icon file-list__sort-arrow" style="--icon: url({tabs.active.descending ? ChevronDownIcon : ChevronUpIcon})" aria-hidden="true"></span>
+        {#if navigation.sort === column.sort}
+          <span class="masked-icon file-list__sort-arrow" style="--icon: url({navigation.descending ? ChevronDownIcon : ChevronUpIcon})" aria-hidden="true"></span>
         {/if}
       </button>
     {:else}
@@ -382,6 +385,7 @@
   aria-label="Folder contents"
   tabindex="-1"
   onkeydown={handleKeydown}
+  onfocusin={() => tabs.focus(navigation)}
   onpointerdown={startBandSelect}
   onpointermove={updateBandSelect}
   onpointerup={endBandSelect}
@@ -400,7 +404,7 @@
       showFolder={!isSortable}
       previewMode={fileOperations.viewMode === 'preview'}
       onactivate={(event) => activateRow(entry, index, event)}
-      onopen={() => tabs.active.openEntry(entry)}
+      onopen={() => navigation.openEntry(entry)}
       onmenu={(event) => openMenuForRow(entry, index, event)}
       ondragstart={(event) => startDrag(entry, event)}
       ondragover={(event) => {
