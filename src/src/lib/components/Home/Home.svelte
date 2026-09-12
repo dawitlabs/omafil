@@ -8,14 +8,19 @@
   import PinIcon from '@fluentui/svg-icons/icons/pin_20_regular.svg?no-inline'
   import SettingsIcon from '@fluentui/svg-icons/icons/settings_20_regular.svg?no-inline'
   import UsbStickFilledIcon from '@fluentui/svg-icons/icons/usb_stick_20_filled.svg?no-inline'
+  import DeleteIcon from '@fluentui/svg-icons/icons/delete_20_regular.svg?no-inline'
   import FileList from '../FileList/FileList.svelte'
+  import ContextMenu from '../ContextMenu/ContextMenu.svelte'
+  import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
   import Settings from '../Settings/Settings.svelte'
   import { appState } from '../../appState.svelte'
   import { fileIcon } from '../../fileIcons'
   import { fileOperations } from '../../fileOperations.svelte'
-  import { formatBytes, formatItems } from '../../format'
+  import { formatBytes, formatItems, formatModified } from '../../format'
   import { tabs } from '../../tabs.svelte'
   import type { DriveInfo, RecentFile } from '../../navigation.svelte'
+
+  type RecycleItem = { id: string; name: string; originalPath: string; deletedAt: number }
 
   let drives = $state<DriveInfo[]>([])
   let isLoadingDrives = $state(true)
@@ -23,6 +28,11 @@
   let recentFiles = $state<RecentFile[]>([])
   let isLoadingRecentFiles = $state(true)
   let recentFilesError = $state<string | null>(null)
+  let recycleItems = $state<RecycleItem[]>([])
+  let recycleError = $state<string | null>(null)
+  let recycleLoading = $state(false)
+  let recycleSelection = $state<string[]>([])
+  let menu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null)
 
   function readableError(error: unknown, fallback: string): string {
     if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
@@ -65,10 +75,32 @@
     }
   }
 
+  async function loadRecycleBin() {
+    recycleLoading = true
+    recycleError = null
+    try { recycleItems = await invoke<RecycleItem[]>('list_recycle_items') } catch (error) { recycleError = readableError(error, 'Unable to read the Recycle Bin.') } finally { recycleLoading = false }
+  }
+
+  async function restoreSelected() {
+    if (recycleSelection.length === 0) return
+    await invoke('restore_recycle_items', { ids: recycleSelection })
+    recycleSelection = []
+    await loadRecycleBin()
+  }
+
+  async function emptyRecycleBin() {
+    if (!confirm('Permanently delete every item in the Recycle Bin?')) return
+    await invoke('empty_recycle_bin')
+    recycleSelection = []
+    await loadRecycleBin()
+  }
+
   onMount(() => {
     void loadDrives()
     void loadRecentFiles()
   })
+
+  $effect(() => { if (tabs.active.view.kind === 'recycle') void loadRecycleBin() })
 </script>
 
 <div class="home-screen">
@@ -79,6 +111,12 @@
           <span class="masked-icon home-view__heading-icon" style="--icon: url({SettingsIcon})" aria-hidden="true"></span><span>Settings</span>
         </h1>
         <Settings />
+      </section>
+    {:else if tabs.active.view.kind === 'recycle'}
+      <section class="home-view__section" aria-labelledby="recycle-heading">
+        <h1 id="recycle-heading" class="home-view__heading"><span class="masked-icon home-view__heading-icon" style="--icon: url({DeleteIcon})" aria-hidden="true"></span><span>Recycle Bin</span></h1>
+        <div class="file-commands" role="toolbar" aria-label="Recycle Bin commands"><button class="file-commands__button" type="button" disabled={recycleSelection.length === 0} onclick={restoreSelected}>Restore</button><button class="file-commands__button" type="button" disabled={recycleItems.length === 0} onclick={emptyRecycleBin}>Empty Recycle Bin</button></div>
+        {#if recycleLoading}<p class="home-view__state">Loading Recycle Bin…</p>{:else if recycleError}<div class="home-view__error" role="alert"><p>{recycleError}</p><button class="home-view__retry" type="button" onclick={loadRecycleBin}>Try again</button></div>{:else if recycleItems.length === 0}<p class="home-view__state">The Recycle Bin is empty.</p>{:else}<div class="recycle-list">{#each recycleItems as item (item.id)}<label class="recycle-list__row"><input type="checkbox" checked={recycleSelection.includes(item.id)} onchange={() => recycleSelection = recycleSelection.includes(item.id) ? recycleSelection.filter((id) => id !== item.id) : [...recycleSelection, item.id]} /><span>{item.name}</span><span title={item.originalPath}>{item.originalPath}</span><span>{formatModified(item.deletedAt)}</span></label>{/each}</div>{/if}
       </section>
     {:else if tabs.active.view.kind === 'home'}
       <section class="home-view__section" aria-labelledby="pinned-heading">
@@ -154,7 +192,7 @@
         {:else}
           <div class="home-view__recent-list">
             {#each recentFiles as file (file.path)}
-              <button class="home-view__recent-row" type="button" onclick={() => tabs.active.openExternally(file.path)}>
+              <button class="home-view__recent-row" type="button" onclick={() => tabs.active.openExternally(file.path)} oncontextmenu={(event) => { event.preventDefault(); menu = { x: event.clientX, y: event.clientY, items: [{ kind: 'action', label: 'Open', onSelect: () => tabs.active.openExternally(file.path) }, { kind: 'action', label: 'Open file location', onSelect: () => tabs.active.open(file.parentDirectory) }, { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.open(); tabs.active.open(file.parentDirectory) } }, { kind: 'separator' }, { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: () => fileOperations.cutPaths([file.path]) }, { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => fileOperations.copyPaths([file.path]) }, { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(file.path) }, { kind: 'separator' }, { kind: 'action', label: appState.isPinned(file.parentDirectory) ? 'Unpin parent folder' : 'Pin parent folder', onSelect: () => appState.togglePin(file.parentDirectory) }, { kind: 'action', label: 'Properties', onSelect: () => fileOperations.showProperties(file.path) }] } }}>
                 <span class="masked-icon home-view__recent-icon" style="--icon: url({fileIcon(file.name).icon}); color: {fileIcon(file.name).tone}" aria-hidden="true"></span>
                 <span>{file.name}</span>
                 <span class="home-view__recent-location">{file.parentDirectory}</span>
@@ -171,15 +209,27 @@
 
         {#if tabs.active.view.kind === 'placeholder'}
           <p class="home-view__state">This location is not connected yet.</p>
-        {:else if tabs.active.isLoading}
-          <p class="home-view__state">Loading {tabs.active.label}…</p>
         {:else if tabs.active.error}
           <div class="home-view__error" role="alert">
             <p>{tabs.active.error}</p>
             <button class="home-view__retry" type="button" onclick={() => tabs.active.reload()}>Try again</button>
           </div>
         {:else}
-          <FileList />
+          {#if tabs.active.entries.length > 0 || !tabs.active.isLoading}
+            <div class="home-view__listing">
+              <FileList />
+              {#if tabs.active.hasMoreEntries}
+                <div class="home-view__load-more">
+                  <button class="file-commands__button" type="button" disabled={tabs.active.isLoadingMore} onclick={() => tabs.active.loadMore()}>
+                    {tabs.active.isLoadingMore ? 'Loading more…' : `Load more (${tabs.active.entries.length} of ${tabs.active.total})`}
+                  </button>
+                </div>
+              {/if}
+              {#if tabs.active.isLoading}<div class="home-view__loading-overlay" role="status">Refreshing…</div>{/if}
+            </div>
+          {:else}
+            <p class="home-view__state">Loading {tabs.active.label}…</p>
+          {/if}
         {/if}
       </section>
     {/if}
@@ -202,3 +252,5 @@
     </span>
   </footer>
 </div>
+
+{#if menu}<ContextMenu x={menu.x} y={menu.y} items={menu.items} onclose={() => menu = null} />{/if}

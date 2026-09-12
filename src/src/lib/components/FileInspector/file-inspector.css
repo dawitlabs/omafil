@@ -1,0 +1,94 @@
+.file-inspector__backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 28%);
+}
+
+.file-inspector {
+  color: var(--text-secondary);
+  background: var(--surface-content);
+}
+
+.file-inspector--dialog {
+  width: min(720px, 100%);
+  min-height: 500px;
+  margin: 0;
+  border: 1px solid var(--border-menu);
+  border-radius: 8px;
+  box-shadow: var(--shadow-menu);
+}
+.file-inspector__dialog-content { min-height: 400px; padding: 8px 28px 20px; }
+.file-inspector__tabs { display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--border-subtle); }
+.file-inspector__tabs button { height: 38px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; color: var(--text-secondary); background: transparent; cursor: pointer; }
+.file-inspector__tabs button[aria-selected='true'] { border-bottom-color: var(--accent); color: var(--text-primary); font-weight: 600; }
+.file-inspector__footer { display: flex; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--border-subtle); }
+.file-inspector__footer button { min-width: 90px; height: 32px; border: 1px solid var(--accent); border-radius: 4px; color: var(--text-on-accent); background: var(--accent); cursor: pointer; }
+
+.file-inspector--preview {
+  position: fixed;
+  z-index: 5;
+  top: var(--app-header-height);
+  right: 0;
+  bottom: 28px;
+  width: min(280px, 40vw);
+  overflow: auto;
+  border-left: 1px solid var(--border-subtle);
+  box-shadow: -8px 0 18px rgb(0 0 0 / 6%);
+}
+
+.file-inspector__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.file-inspector__header h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.file-inspector__header button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  place-items: center;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.file-inspector__header button:hover { background: var(--surface-hover); }
+.file-inspector__header button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.file-inspector__header .masked-icon { width: 18px; height: 18px; }
+
+.file-inspector__identity { display: grid; gap: 6px; padding: 22px 18px 14px; text-align: center; }
+.file-inspector__identity--dialog { grid-template-columns: 64px minmax(0, 1fr); grid-template-rows: auto auto; align-items: center; padding: 24px 0 20px; text-align: left; }
+.file-inspector__identity--dialog .file-inspector__icon { grid-row: span 2; margin: 0; }
+.file-inspector__identity--dialog strong { align-self: end; font-size: 16px; }
+.file-inspector__identity strong { overflow: hidden; color: var(--text-primary); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.file-inspector__identity span:last-child, .file-inspector__state { color: var(--text-muted); font-size: 12px; }
+.file-inspector__icon { width: 48px; height: 48px; margin: 0 auto 4px; }
+
+.file-inspector__details { display: grid; gap: 10px; padding: 0 18px 18px; margin: 0; }
+.file-inspector--dialog .file-inspector__details { padding: 0; }
+.file-inspector__section { padding: 16px 0 4px; border-top: 1px solid var(--border-subtle); }
+.file-inspector__section h3 { margin: 0 0 14px; color: var(--text-primary); font-size: 13px; font-weight: 600; }
+.file-inspector__details div { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 8px; font-size: 12px; }
+.file-inspector__details dt { color: var(--text-muted); }
+.file-inspector__details dd { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-inspector__location { padding: 6px 8px; border: 1px solid var(--border-subtle); border-radius: 3px; background: var(--surface-input); }
+.file-inspector__text-preview { max-height: 280px; padding: 10px; margin: 0 18px 14px; overflow: auto; border: 1px solid var(--border-subtle); border-radius: 4px; color: var(--text-secondary); background: var(--surface-input); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
+.file-inspector__media-preview { display: block; width: calc(100% - 36px); max-height: 300px; margin: 0 18px 18px; border: 1px solid var(--border-subtle); border-radius: 4px; background: var(--surface-input); object-fit: contain; }
+.file-inspector__state { padding: 0 18px 18px; margin: 0; }

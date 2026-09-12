@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { tick } from 'svelte'
+  import { appState } from '../../appState.svelte'
+  import { convertFileSrc } from '@tauri-apps/api/core'
   import { fileIcon, folderIcon } from '../../fileIcons'
   import { fileOperations } from '../../fileOperations.svelte'
   import { formatBytes, formatModified, parentFolder, typeLabel } from '../../format'
@@ -9,22 +12,42 @@
     index,
     isActive,
     showFolder,
+    previewMode,
     onactivate,
     onopen,
     onmenu,
+    ondragstart,
+    ondragover,
+    ondrop,
   }: {
     entry: DirectoryEntry
     index: number
     isActive: boolean
     showFolder: boolean
+    previewMode: boolean
     onactivate: (event: MouseEvent) => void
     onopen: () => void
     onmenu: (event: MouseEvent) => void
+    ondragstart: (event: DragEvent) => void
+    ondragover: (event: DragEvent) => void
+    ondrop: (event: DragEvent) => void
   } = $props()
 
   const isDirectory = $derived(entry.entryType === 'directory')
   const icon = $derived(isDirectory ? folderIcon : fileIcon(entry.name))
   const isRenaming = $derived(fileOperations.renamingPath === entry.path)
+  const imageFile = $derived(/\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(entry.name))
+  const thumbnailSource = $derived(imageFile ? convertFileSrc(entry.path) : null)
+  let renameInput = $state<HTMLInputElement | null>(null)
+
+  $effect(() => {
+    if (!isRenaming) return
+
+    void tick().then(() => {
+      renameInput?.focus()
+      renameInput?.select()
+    })
+  })
 </script>
 
 <div
@@ -42,8 +65,16 @@
     event.preventDefault()
     onmenu(event)
   }}
+  draggable={!isRenaming}
+  ondragstart={ondragstart}
+  ondragover={ondragover}
+  ondrop={ondrop}
 >
-  <span class="masked-icon file-row__icon" style="--icon: url({icon.icon}); color: {icon.tone}" aria-hidden="true"></span>
+  {#if previewMode && thumbnailSource}
+    <img class="file-row__thumbnail" src={thumbnailSource} alt="" loading="lazy" decoding="async" />
+  {:else}
+    <span class="masked-icon file-row__icon" style="--icon: url({icon.icon}); color: {icon.tone}" aria-hidden="true"></span>
+  {/if}
 
   {#if isRenaming}
     <!-- svelte-ignore a11y_autofocus -->
@@ -51,6 +82,7 @@
       class="file-row__rename"
       type="text"
       autofocus
+      bind:this={renameInput}
       aria-label="New name"
       bind:value={fileOperations.renameDraft}
       onfocus={(event) => event.currentTarget.select()}
@@ -62,7 +94,12 @@
       }}
     />
   {:else}
-    <span class="file-row__name">{entry.name}</span>
+    <span class="file-row__name">
+      <span class="file-row__label">{entry.name}</span>
+      {#each appState.tagsFor(entry.path) as tag (tag.id)}
+        <span class="file-row__tag" style="background: {tag.color}" title={tag.label}></span>
+      {/each}
+    </span>
   {/if}
 
   {#if showFolder}

@@ -15,9 +15,11 @@
   import TagIcon from '@fluentui/svg-icons/icons/tag_20_regular.svg?no-inline'
   import UsbStickIcon from '@fluentui/svg-icons/icons/usb_stick_20_regular.svg?no-inline'
   import VideoIcon from '@fluentui/svg-icons/icons/video_20_regular.svg?no-inline'
+  import DeleteIcon from '@fluentui/svg-icons/icons/delete_20_regular.svg?no-inline'
   import ContextMenu from '../ContextMenu/ContextMenu.svelte'
   import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
   import { appState } from '../../appState.svelte'
+  import { fileOperations } from '../../fileOperations.svelte'
   import { knownLocations } from '../../navigation.svelte'
   import type { DriveInfo, KnownLocation } from '../../navigation.svelte'
   import { tabs } from '../../tabs.svelte'
@@ -145,6 +147,13 @@
     </nav>
   </section>
 
+  <nav class="file-sidebar__primary-nav" aria-label="Recovery">
+    <button class="file-sidebar__item" class:file-sidebar__item--active={active.view.kind === 'recycle'} type="button" aria-current={active.view.kind === 'recycle' ? 'page' : undefined} onclick={() => active.openRecycleBin()}>
+      <span class="masked-icon file-sidebar__icon" style="--icon: url({DeleteIcon})" aria-hidden="true"></span>
+      <span>Recycle Bin</span>
+    </button>
+  </nav>
+
   <section class="file-sidebar__section" aria-labelledby="sidebar-files-heading">
     <h2 id="sidebar-files-heading" class="file-sidebar__section-heading">
       <span class="masked-icon file-sidebar__icon" style="--icon: url({FolderIcon})" aria-hidden="true"></span>
@@ -158,6 +167,7 @@
           type="button"
           aria-current={isLocationActive(item.location) ? 'page' : undefined}
           onclick={() => active.openLocation(item.location)}
+          oncontextmenu={(event) => openMenu(event, [{ kind: 'action', label: 'Open', onSelect: () => active.openLocation(item.location) }, { kind: 'action', label: 'Open in new tab', onSelect: async () => { const path = await invoke<string>('resolve_location', { location: item.location }); tabs.open(); tabs.active.open(path) } }, { kind: 'action', label: 'Open externally', onSelect: async () => active.openExternally(await invoke<string>('resolve_location', { location: item.location })) }, { kind: 'separator' }, { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: async () => fileOperations.cutPaths([await invoke<string>('resolve_location', { location: item.location })]) }, { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: async () => fileOperations.copyPaths([await invoke<string>('resolve_location', { location: item.location })]) }, { kind: 'action', label: 'Paste into folder', shortcut: 'Ctrl+V', disabled: !fileOperations.canPaste, onSelect: async () => fileOperations.pasteTo(await invoke<string>('resolve_location', { location: item.location })) }, { kind: 'separator' }, { kind: 'action', label: 'Pin to sidebar', onSelect: async () => appState.togglePin(await invoke<string>('resolve_location', { location: item.location })) }, { kind: 'action', label: 'Copy path', onSelect: async () => navigator.clipboard.writeText(await invoke<string>('resolve_location', { location: item.location })) }, { kind: 'action', label: 'Properties', onSelect: async () => fileOperations.showProperties(await invoke<string>('resolve_location', { location: item.location })) }, { kind: 'action', label: 'Refresh', onSelect: () => active.reload() }])}
         >
           <span class="masked-icon file-sidebar__icon" style="--icon: url({item.icon})" aria-hidden="true"></span>
           <span>{item.label}</span>
@@ -184,6 +194,7 @@
             type="button"
             aria-current={active.isCurrentPath(drive.path) ? 'page' : undefined}
             onclick={() => active.open(drive.path)}
+            oncontextmenu={(event) => openMenu(event, [{ kind: 'action', label: 'Open', onSelect: () => active.open(drive.path) }, { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.open(); tabs.active.open(drive.path) } }, { kind: 'separator' }, { kind: 'action', label: appState.isPinned(drive.path) ? 'Unpin from sidebar' : 'Pin to sidebar', onSelect: () => appState.togglePin(drive.path) }, { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(drive.path) }])}
           >
             <span class="masked-icon file-sidebar__icon" style="--icon: url({drive.isRemovable ? UsbStickIcon : HardDriveIcon})" aria-hidden="true"></span>
             <span>{drive.name || drive.mountPoint}</span>

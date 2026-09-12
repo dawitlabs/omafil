@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -27,6 +27,9 @@ quick-xml = "0.41.0"
 url = "2.5.8"
 trash = "5.2.7"
 notify = "8.2.0"
+zip = "4.0.0"
+tempfile = "3.27.0"
+rustix = { version = "1.1.4", features = ["fs"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

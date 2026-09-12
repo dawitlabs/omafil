@@ -23,6 +23,9 @@ pub(crate) fn is_user_visible_drive_mount(mount_point: &Path) -> bool {
     mount_point.starts_with("/media")
         || mount_point.starts_with("/mnt")
         || mount_point.starts_with("/run/media")
+        // GNOME/KDE mount SMB, SFTP and other GVFS locations beneath the
+        // current user's runtime directory instead of /media.
+        || mount_point.to_string_lossy().contains("/gvfs/")
 }
 
 pub(crate) fn drive_navigation_path(mount_point: &Path) -> PathBuf {
@@ -87,6 +90,7 @@ mod tests {
         assert!(is_user_visible_drive_mount(Path::new("/")));
         assert!(is_user_visible_drive_mount(Path::new("/run/media/dave/USB")));
         assert!(is_user_visible_drive_mount(Path::new("/media/USB")));
+        assert!(is_user_visible_drive_mount(Path::new("/run/user/1000/gvfs/smb-share:server=nas,share=files")));
         assert!(!is_user_visible_drive_mount(Path::new("/proc")));
         assert!(!is_user_visible_drive_mount(Path::new("/var/lib/docker")));
         assert!(!is_user_visible_drive_mount(Path::new("/home")));

@@ -15,4 +15,12 @@
   <span class="file-commands__divider" aria-hidden="true"></span>
   <button class="file-commands__button" type="button" disabled={!hasSingleSelection} onclick={() => fileOperations.startRenaming()}>Rename</button>
   <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => fileOperations.deleteSelection()}>Delete</button>
+  <button class="file-commands__button" type="button" disabled={fileOperations.selectedPaths.length < 2} onclick={() => fileOperations.compressSelection()}>Compress</button>
+  <button class="file-commands__button" type="button" disabled={!hasSingleSelection} onclick={() => fileOperations.extractSelection()}>Extract</button>
+  <span class="file-commands__divider" aria-hidden="true"></span>
+  <button class="file-commands__button" type="button" disabled={!hasSingleSelection} onclick={() => fileOperations.showProperties()}>Properties</button>
+  <span class="file-commands__divider" aria-hidden="true"></span>
+  <button class="file-commands__button" type="button" aria-pressed={fileOperations.viewMode === 'details'} onclick={() => (fileOperations.viewMode = 'details')}>Details</button>
+  <button class="file-commands__button" type="button" aria-pressed={fileOperations.viewMode === 'icons'} onclick={() => (fileOperations.viewMode = 'icons')}>Icons</button>
+  <button class="file-commands__button" type="button" aria-pressed={fileOperations.viewMode === 'preview'} onclick={() => (fileOperations.viewMode = 'preview')}>Preview</button>
 </div>

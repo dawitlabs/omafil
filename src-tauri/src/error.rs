@@ -1,9 +1,9 @@
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub(crate) struct DirectoryError {
     code: &'static str,
-    message: &'static str,
+    message: String,
 }
 
 #[derive(Serialize)]
@@ -19,59 +19,80 @@ pub(crate) struct RecentFilesError {
 }
 
 impl DirectoryError {
-    pub(crate) const fn unavailable() -> Self {
+    pub(crate) fn cancelled() -> Self {
         Self {
-            code: "directory_unavailable",
-            message: "This folder is unavailable on this device.",
+            code: "operation_cancelled",
+            message: "Operation cancelled. Completed items were kept.".into(),
         }
     }
 
-    pub(crate) const fn read_failed() -> Self {
-        Self {
-            code: "directory_read_failed",
-            message: "Unable to read this folder.",
-        }
-    }
-
-    pub(crate) const fn not_allowed() -> Self {
-        Self {
-            code: "directory_not_allowed",
-            message: "This location is outside your files and drives.",
-        }
-    }
-
-    pub(crate) const fn open_failed() -> Self {
-        Self {
-            code: "open_failed",
-            message: "Unable to open this item.",
-        }
-    }
-
-    pub(crate) const fn invalid_name() -> Self {
-        Self {
-            code: "invalid_name",
-            message: "That name contains characters that are not allowed.",
-        }
-    }
-
-    pub(crate) const fn already_exists() -> Self {
-        Self {
-            code: "already_exists",
-            message: "An item with that name already exists here.",
-        }
-    }
-
-    pub(crate) const fn invalid_destination() -> Self {
-        Self {
-            code: "invalid_destination",
-            message: "A folder cannot be moved into itself.",
-        }
-    }
-
-    pub(crate) const fn operation_failed() -> Self {
+    pub(crate) fn detail(message: impl Into<String>) -> Self {
         Self {
             code: "operation_failed",
-            message: "Unable to complete that operation.",
+            message: message.into(),
+        }
+    }
+
+    pub(crate) fn is_cancelled(&self) -> bool {
+        self.code == "operation_cancelled"
+    }
+    pub(crate) fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub(crate) fn unavailable() -> Self {
+        Self {
+            code: "directory_unavailable",
+            message: "This folder is unavailable on this device.".into(),
+        }
+    }
+
+    pub(crate) fn read_failed() -> Self {
+        Self {
+            code: "directory_read_failed",
+            message: "Unable to read this folder.".into(),
+        }
+    }
+
+    pub(crate) fn not_allowed() -> Self {
+        Self {
+            code: "directory_not_allowed",
+            message: "This location is outside your files and drives.".into(),
+        }
+    }
+
+    pub(crate) fn open_failed() -> Self {
+        Self {
+            code: "open_failed",
+            message: "Unable to open this item.".into(),
+        }
+    }
+
+    pub(crate) fn invalid_name() -> Self {
+        Self {
+            code: "invalid_name",
+            message: "That name contains characters that are not allowed.".into(),
+        }
+    }
+
+    pub(crate) fn already_exists() -> Self {
+        Self {
+            code: "already_exists",
+            message: "An item with that name already exists here.".into(),
+        }
+    }
+
+    pub(crate) fn invalid_destination() -> Self {
+        Self {
+            code: "invalid_destination",
+            message: "A folder cannot be moved into itself.".into(),
+        }
+    }
+
+    pub(crate) fn operation_failed() -> Self {
+        Self {
+            code: "operation_failed",
+            message: "Unable to complete that operation.".into(),
         }
     }
 }
@@ -91,5 +112,11 @@ impl DriveError {
             code: "drive_discovery_failed",
             message: "Unable to discover mounted drives.",
         }
+    }
+}
+
+impl From<std::io::Error> for DirectoryError {
+    fn from(error: std::io::Error) -> Self {
+        Self::detail(format!("Unable to complete this operation: {error}"))
     }
 }

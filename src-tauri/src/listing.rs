@@ -7,7 +7,7 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-pub(crate) const MAX_DIRECTORY_ENTRIES: usize = 2000;
+pub(crate) const MAX_PAGE_SIZE: usize = 1_000;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -49,6 +49,7 @@ pub(crate) struct DirectoryListing {
     crumbs: Vec<PathCrumb>,
     entries: Vec<DirectoryEntry>,
     total: usize,
+    has_more: bool,
 }
 
 pub(crate) fn entry_extension(name: &str) -> String {
@@ -140,8 +141,6 @@ pub(crate) fn read_directory_entries(
     entries.sort_by(|left, right| compare_entries(left, right, sort, descending));
 
     let total = entries.len();
-    entries.truncate(MAX_DIRECTORY_ENTRIES);
-
     Ok((entries, total))
 }
 
@@ -199,6 +198,8 @@ pub(crate) fn read_directory_listing(
     sort: EntrySort,
     descending: bool,
     show_hidden: bool,
+    offset: usize,
+    limit: usize,
 ) -> Result<DirectoryListing, DirectoryError> {
     let directory = resolve_navigable_path(&path)?;
 
@@ -209,11 +210,16 @@ pub(crate) fn read_directory_listing(
     let (entries, total) = read_directory_entries(&directory, sort, descending, show_hidden)
         .map_err(|_| DirectoryError::read_failed())?;
 
+    let page_size = limit.clamp(1, MAX_PAGE_SIZE);
+    let has_more = offset.saturating_add(page_size) < total;
+    let entries = entries.into_iter().skip(offset).take(page_size).collect();
+
     Ok(DirectoryListing {
         crumbs: path_crumbs(&directory, &navigable_roots()),
         path: directory.to_string_lossy().into_owned(),
         entries,
         total,
+        has_more,
     })
 }
 

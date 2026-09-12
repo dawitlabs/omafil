@@ -1,6 +1,6 @@
 use crate::error::DirectoryError;
 use crate::paths::resolve_navigable_path;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
     path::PathBuf,
     sync::{mpsc, Mutex},
@@ -11,6 +11,12 @@ use std::{
 /// A burst of writes lands as many events; this is how long the walk waits for
 /// quiet before reporting a single change.
 const SETTLE: Duration = Duration::from_millis(200);
+
+/// Opening or reading a file produces access notifications. Those do not
+/// change the folder listing and must never cause a UI refresh.
+fn changes_directory_contents(event: &Event) -> bool {
+    matches!(event.kind, EventKind::Create(_) | EventKind::Remove(_) | EventKind::Modify(_))
+}
 
 #[derive(Default)]
 pub(crate) struct DirectoryWatcher {
@@ -49,7 +55,11 @@ where
 {
     let (sender, receiver) = mpsc::channel();
     let mut watcher = notify::recommended_watcher(move |event| {
-        let _ = sender.send(event);
+        if let Ok(event) = event {
+            if changes_directory_contents(&event) {
+                let _ = sender.send(());
+            }
+        }
     })?;
 
     watcher.watch(&directory, RecursiveMode::NonRecursive)?;
@@ -70,8 +80,18 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::start_watch;
+    use super::{changes_directory_contents, start_watch};
+    use notify::{event::{AccessKind, AccessMode, CreateKind}, Event, EventKind};
     use std::{fs, sync::mpsc, time::Duration};
+
+    #[test]
+    fn opening_a_file_does_not_refresh_its_folder() {
+        let opened = Event::new(EventKind::Access(AccessKind::Open(AccessMode::Any)));
+        let created = Event::new(EventKind::Create(CreateKind::Any));
+
+        assert!(!changes_directory_contents(&opened));
+        assert!(changes_directory_contents(&created));
+    }
 
     #[test]
     fn a_new_file_is_reported_once_the_directory_settles() {

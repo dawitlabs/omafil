@@ -18,6 +18,8 @@
   let band = $state<Band | null>(null)
   let menu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null)
   let bandOrigin: { x: number; y: number } | null = null
+  let typeAhead = ''
+  let typeAheadTimer: ReturnType<typeof setTimeout> | null = null
 
   const entries = $derived(tabs.active.entries)
   const hiddenCount = $derived(tabs.active.hiddenCount)
@@ -77,6 +79,16 @@
         { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: () => fileOperations.cutSelection() },
         { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => fileOperations.copySelection() },
         { kind: 'separator' },
+        ...(fileOperations.selectedPaths.length > 1 ? [{ kind: 'action', label: 'Compress to ZIP', onSelect: () => fileOperations.compressSelection() } as ContextMenuItem] : []),
+        { kind: 'action', label: 'Extract here', disabled: !entry.name.toLowerCase().endsWith('.zip'), onSelect: () => fileOperations.extractSelection() },
+        { kind: 'separator' },
+        {
+          kind: 'action',
+          label: 'Properties',
+          shortcut: 'Alt+Enter',
+          disabled: fileOperations.selectedPaths.length !== 1,
+          onSelect: () => fileOperations.showProperties(entry.path),
+        },
         {
           kind: 'action',
           label: 'Rename',
@@ -85,6 +97,7 @@
           onSelect: () => fileOperations.startRenaming(entry.path),
         },
         { kind: 'action', label: 'Move to trash', shortcut: 'Del', onSelect: () => fileOperations.deleteSelection() },
+        { kind: 'action', label: 'Delete permanently', shortcut: 'Shift+Del', onSelect: () => fileOperations.requestPermanentDelete() },
         { kind: 'separator' },
         {
           kind: 'action',
@@ -171,6 +184,22 @@
     if (entry) fileOperations.selectOnly(entry.path)
   }
 
+  function selectByTyping(character: string) {
+    const lowerCharacter = character.toLocaleLowerCase()
+    typeAhead = typeAhead === lowerCharacter ? lowerCharacter : `${typeAhead}${lowerCharacter}`
+
+    if (typeAheadTimer) clearTimeout(typeAheadTimer)
+    typeAheadTimer = setTimeout(() => {
+      typeAhead = ''
+      typeAheadTimer = null
+    }, 900)
+
+    const ordered = [...entries.slice(activeIndex + 1), ...entries.slice(0, activeIndex + 1)]
+    const match = ordered.find((candidate) => candidate.name.toLocaleLowerCase().startsWith(typeAhead))
+
+    if (match) moveSelection(entries.indexOf(match))
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (fileOperations.renamingPath) return
 
@@ -178,6 +207,7 @@
 
     if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'n') {
       event.preventDefault()
+      event.stopPropagation()
       void fileOperations.createFolder()
       return
     }
@@ -188,6 +218,9 @@
         c: () => fileOperations.copySelection(),
         x: () => fileOperations.cutSelection(),
         v: () => void fileOperations.paste(),
+        '1': () => fileOperations.viewMode = 'details',
+        '2': () => fileOperations.viewMode = 'icons',
+        '3': () => fileOperations.viewMode = 'preview',
       }
       const shortcut = shortcuts[event.key.toLowerCase()]
 
@@ -211,10 +244,45 @@
       return
     }
 
-    if (event.key === 'Enter' && entry) void tabs.active.openEntry(entry)
+    if (event.key === 'F5') {
+      event.preventDefault()
+      tabs.active.reload()
+    }
+    else if (event.key === 'Backspace') {
+      event.preventDefault()
+      tabs.active.up()
+    }
+    else if (event.altKey && event.key === 'Enter') fileOperations.showProperties()
+    else if (event.key === 'Enter' && entry) void tabs.active.openEntry(entry)
     else if (event.key === 'F2') fileOperations.startRenaming()
+    else if (event.shiftKey && event.key === 'Delete') fileOperations.requestPermanentDelete()
     else if (event.key === 'Delete') void fileOperations.deleteSelection()
     else if (event.key === 'Escape') fileOperations.clearSelection()
+    else if (event.key.length === 1 && !event.altKey) {
+      event.preventDefault()
+      selectByTyping(event.key)
+    }
+  }
+
+  function startDrag(entry: DirectoryEntry, event: DragEvent) {
+    if (!fileOperations.isSelected(entry.path)) fileOperations.selectOnly(entry.path)
+    event.dataTransfer?.setData('application/x-omafil-paths', JSON.stringify(fileOperations.selectedPaths))
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copyMove'
+  }
+
+  function dropOnFolder(entry: DirectoryEntry, event: DragEvent) {
+    if (entry.entryType !== 'directory') return
+
+    const source = event.dataTransfer?.getData('application/x-omafil-paths')
+    if (!source) return
+
+    try {
+      const paths = JSON.parse(source) as string[]
+      void fileOperations.movePathsTo(paths, entry.path, event.ctrlKey || event.metaKey)
+    } catch {
+      // Drops from other applications are intentionally left to their native
+      // import workflow; this slice transfers items already in Omafil.
+    }
   }
 
   function handleWindowKeydown(event: KeyboardEvent) {
@@ -237,6 +305,13 @@
   </div>
 {/if}
 
+{#if tabs.active.missingTagged > 0}
+  <p class="file-list__notice">
+    {formatCount(tabs.active.missingTagged)}
+    tagged {tabs.active.missingTagged === 1 ? 'item is' : 'items are'} not reachable right now, so they are not listed.
+  </p>
+{/if}
+
 {#if tabs.active.isSearchTruncated}
   <p class="file-list__notice">Showing the first {formatCount(entries.length)} matches. Narrow the search to see fewer.</p>
 {/if}
@@ -247,9 +322,10 @@
   </p>
 {/if}
 
-<div class="file-list__columns" role="presentation">
-  <span></span>
-  {#each columns as column (column.label)}
+{#if fileOperations.viewMode === 'details'}
+  <div class="file-list__columns" role="presentation">
+    <span></span>
+    {#each columns as column (column.label)}
     {#if isSortable}
       <button
         class="file-list__column {column.className}"
@@ -268,13 +344,16 @@
     {:else}
       <span class="file-list__column file-list__column--static {column.className}">{column.label}</span>
     {/if}
-  {/each}
-</div>
+    {/each}
+  </div>
+{/if}
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   bind:this={list}
   class="file-list"
+  class:file-list--icons={fileOperations.viewMode === 'icons'}
+  class:file-list--preview={fileOperations.viewMode === 'preview'}
   role="listbox"
   aria-multiselectable="true"
   aria-label="Folder contents"
@@ -296,9 +375,15 @@
       {index}
       isActive={index === activeIndex}
       showFolder={!isSortable}
+      previewMode={fileOperations.viewMode === 'preview'}
       onactivate={(event) => activateRow(entry, index, event)}
       onopen={() => tabs.active.openEntry(entry)}
       onmenu={(event) => openMenuForRow(entry, index, event)}
+      ondragstart={(event) => startDrag(entry, event)}
+      ondragover={(event) => {
+        if (entry.entryType === 'directory') event.preventDefault()
+      }}
+      ondrop={(event) => dropOnFolder(entry, event)}
     />
   {/each}
 
@@ -310,6 +395,46 @@
     <div class="file-list__band" style="left: {band.left}px; top: {band.top}px; width: {band.width}px; height: {band.height}px" aria-hidden="true"></div>
   {/if}
 </div>
+
+{#if fileOperations.pendingTransfer}
+  <div class="file-conflict__backdrop" role="presentation" onclick={(event) => event.target === event.currentTarget && fileOperations.cancelPendingTransfer()}>
+    <dialog open class="file-conflict" aria-labelledby="file-conflict-title">
+      <h2 id="file-conflict-title">Items already exist here</h2>
+      <p>{formatCount(fileOperations.pendingTransfer.conflicts.length)} item{fileOperations.pendingTransfer.conflicts.length === 1 ? '' : 's'} have the same name in the destination.</p>
+      <ul>{#each fileOperations.pendingTransfer.conflicts.slice(0, 4) as conflict (conflict.destinationPath)}<li>{conflict.name}</li>{/each}</ul>
+      <div class="file-conflict__actions">
+        <button type="button" onclick={() => fileOperations.cancelPendingTransfer()}>Cancel</button>
+        <button type="button" onclick={() => fileOperations.resolvePendingTransfer('skip')}>Skip existing</button>
+        <button type="button" onclick={() => fileOperations.resolvePendingTransfer('rename')}>Keep both</button>
+        <button class="file-conflict__replace" type="button" onclick={() => fileOperations.resolvePendingTransfer('replace')}>Replace</button>
+      </div>
+    </dialog>
+  </div>
+{/if}
+
+{#if fileOperations.pendingPermanentDelete}
+  <div class="file-conflict__backdrop" role="presentation" onclick={(event) => event.target === event.currentTarget && fileOperations.cancelPermanentDelete()}>
+    <dialog open class="file-conflict" aria-labelledby="permanent-delete-title">
+      <h2 id="permanent-delete-title">Permanently delete?</h2>
+      <p>{formatCount(fileOperations.pendingPermanentDelete.length)} selected item{fileOperations.pendingPermanentDelete.length === 1 ? '' : 's'} will be deleted without being moved to the trash.</p>
+      <div class="file-conflict__actions">
+        <button type="button" onclick={() => fileOperations.cancelPermanentDelete()}>Cancel</button>
+        <button class="file-conflict__replace" type="button" onclick={() => fileOperations.confirmPermanentDelete()}>Delete permanently</button>
+      </div>
+    </dialog>
+  </div>
+{/if}
+
+{#if fileOperations.pendingArchivePaths}
+  <div class="file-conflict__backdrop" role="presentation" onclick={(event) => event.target === event.currentTarget && fileOperations.cancelArchive()}>
+    <dialog open class="file-conflict file-archive-dialog" aria-labelledby="archive-title">
+      <h2 id="archive-title">Create ZIP archive</h2>
+      <p>{fileOperations.pendingArchivePaths.length} selected item{fileOperations.pendingArchivePaths.length === 1 ? '' : 's'} will be compressed into a ZIP file.</p>
+      <label class="file-archive-dialog__field" for="archive-name">Archive name<!-- svelte-ignore a11y_autofocus --><input id="archive-name" autofocus bind:value={fileOperations.archiveDraft} onkeydown={(event) => { if (event.key === 'Enter') fileOperations.createArchive(); else if (event.key === 'Escape') fileOperations.cancelArchive() }} /></label>
+      <div class="file-conflict__actions"><button type="button" onclick={() => fileOperations.cancelArchive()}>Cancel</button><button class="file-conflict__replace" type="button" disabled={!fileOperations.archiveDraft.trim()} onclick={() => fileOperations.createArchive()}>Create</button></div>
+    </dialog>
+  </div>
+{/if}
 
 {#if menu}
   <ContextMenu x={menu.x} y={menu.y} items={menu.items} onclose={() => (menu = null)} />

@@ -14,13 +14,17 @@
   import MaximizeIcon from '@fluentui/svg-icons/icons/square_20_regular.svg?no-inline'
   import { getCurrentWindow } from '@tauri-apps/api/window'
   import { tabs } from '../../tabs.svelte'
+  import { fileOperations } from '../../fileOperations.svelte'
 
   const SEARCH_DELAY_MS = 300
 
   const appWindow = getCurrentWindow()
 
   let query = $state('')
+  let address = $state('')
+  let editingAddress = $state(false)
   let searchTimer: ReturnType<typeof setTimeout> | null = null
+  let searchInput = $state<HTMLInputElement | null>(null)
 
   const active = $derived(tabs.active)
 
@@ -28,6 +32,7 @@
     const view = active.view
 
     query = view.kind === 'search' ? view.query : ''
+    address = view.kind === 'folder' ? view.path : ''
   })
 
   function runSearch(value: string) {
@@ -39,14 +44,36 @@
   }
 
   function handleWindowKeydown(event: KeyboardEvent) {
+    const target = event.target as HTMLElement | null
+    if (target?.matches('input, textarea, select, [contenteditable="true"]')) return
+
+    if (event.key === 'F5') {
+      event.preventDefault()
+      active.reload()
+      return
+    }
+
     if (!(event.ctrlKey || event.metaKey)) return
 
-    if (event.key.toLowerCase() === 't') {
+    if (event.shiftKey && event.key.toLowerCase() === 'n' && fileOperations.directoryPath) {
+      event.preventDefault()
+      void fileOperations.createFolder()
+    } else if (event.key.toLowerCase() === 't') {
       event.preventDefault()
       tabs.open()
     } else if (event.key.toLowerCase() === 'w' && tabs.canClose) {
       event.preventDefault()
       tabs.close(tabs.activeIndex)
+    } else if (event.key.toLowerCase() === 'l') {
+      event.preventDefault()
+      editingAddress = true
+    } else if (event.key.toLowerCase() === 'f' || event.key.toLowerCase() === 'e') {
+      event.preventDefault()
+      searchInput?.focus()
+      searchInput?.select()
+    } else if (event.key.toLowerCase() === 'r') {
+      event.preventDefault()
+      active.reload()
     }
   }
 
@@ -130,7 +157,20 @@
       </button>
     </div>
 
-    <nav class="app-header__path" aria-label="Breadcrumb">
+    {#if editingAddress}
+      <form class="app-header__address" onsubmit={(event) => {
+        event.preventDefault()
+        const path = address.trim()
+        if (path) active.open(path)
+        editingAddress = false
+      }}>
+        <!-- svelte-ignore a11y_autofocus -->
+        <input autofocus aria-label="Folder path" bind:value={address} onkeydown={(event) => {
+          if (event.key === 'Escape') editingAddress = false
+        }} />
+      </form>
+    {:else}
+    <nav class="app-header__path" aria-label="Breadcrumb" ondblclick={() => (editingAddress = true)}>
       <button class="app-header__crumb" type="button" onclick={() => active.goHome()}>
         <span class="masked-icon app-header__tab-icon" style="--icon: url({active.view.kind === 'home' ? HomeIcon : FolderIcon})" aria-hidden="true"></span>
         <span>{active.view.kind === 'home' ? 'Home' : 'Files'}</span>
@@ -148,12 +188,14 @@
         <span class="app-header__crumb app-header__crumb--static">{active.label}</span>
       {/if}
     </nav>
+    {/if}
 
     <label class="app-header__search">
       <span class="masked-icon app-header__icon" style="--icon: url({SearchIcon})" aria-hidden="true"></span>
       <input
         type="search"
-        placeholder={`Search ${active.searchScope}`}
+        bind:this={searchInput}
+        placeholder={`Search ${active.searchScope} · type:image size:>10mb`}
         aria-label={`Search ${active.searchScope}`}
         bind:value={query}
         oninput={() => runSearch(query)}

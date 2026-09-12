@@ -14,3 +14,17 @@
   min-width: 0;
   min-height: 0;
 }
+
+.app-drop-overlay {
+  position: fixed;
+  z-index: 30;
+  inset: 68px 0 0 240px;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  color: var(--text-accent);
+  background: var(--accent-soft);
+  font-size: 15px;
+  font-weight: 600;
+  pointer-events: none;
+}

@@ -20,6 +20,57 @@ const CANCEL_CHECK_EVERY: usize = 256;
 const MIN_FUZZY_QUERY: usize = 3;
 
 #[derive(Default)]
+struct SearchFilter {
+    terms: Vec<String>,
+    extensions: Vec<String>,
+    minimum_size: Option<u64>,
+    maximum_size: Option<u64>,
+}
+
+fn parse_size(value: &str) -> Option<u64> {
+    let value = value.trim().to_lowercase();
+    let (number, multiplier) = if let Some(number) = value.strip_suffix("kb") { (number, 1024) }
+    else if let Some(number) = value.strip_suffix("mb") { (number, 1024 * 1024) }
+    else if let Some(number) = value.strip_suffix("gb") { (number, 1024 * 1024 * 1024) }
+    else { (value.as_str(), 1) };
+    number.trim().parse::<u64>().ok()?.checked_mul(multiplier)
+}
+
+fn type_extensions(value: &str) -> Vec<String> {
+    match value {
+        "image" | "images" => ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif"].into_iter().map(str::to_owned).collect(),
+        "video" | "videos" => ["mp4", "mkv", "webm", "avi", "mov", "mpeg"].into_iter().map(str::to_owned).collect(),
+        "audio" | "music" => ["mp3", "wav", "flac", "ogg", "m4a", "aac"].into_iter().map(str::to_owned).collect(),
+        "document" | "documents" => ["pdf", "doc", "docx", "odt", "txt", "md", "rtf"].into_iter().map(str::to_owned).collect(),
+        "archive" | "archives" => ["zip", "7z", "tar", "gz", "xz", "bz2", "rar"].into_iter().map(str::to_owned).collect(),
+        other => vec![other.trim_start_matches('.').to_owned()],
+    }
+}
+
+fn parse_filter(query: &str) -> SearchFilter {
+    let mut filter = SearchFilter::default();
+    for token in query.split_whitespace() {
+        if let Some(value) = token.strip_prefix("type:").or_else(|| token.strip_prefix("ext:")) {
+            filter.extensions.extend(type_extensions(&value.to_lowercase()));
+        } else if let Some(value) = token.strip_prefix("size:>") {
+            filter.minimum_size = parse_size(value);
+        } else if let Some(value) = token.strip_prefix("size:<") {
+            filter.maximum_size = parse_size(value);
+        } else {
+            filter.terms.push(token.to_owned());
+        }
+    }
+    filter
+}
+
+fn matches_filter(filter: &SearchFilter, name: &str, size: u64) -> bool {
+    let extension = name.rsplit_once('.').map(|(_, extension)| extension.to_lowercase()).unwrap_or_default();
+    (filter.extensions.is_empty() || filter.extensions.iter().any(|wanted| wanted == &extension))
+        && filter.minimum_size.is_none_or(|minimum| size > minimum)
+        && filter.maximum_size.is_none_or(|maximum| size < maximum)
+}
+
+#[derive(Default)]
 pub(crate) struct SearchGeneration(Arc<AtomicU64>);
 
 impl SearchGeneration {
@@ -124,9 +175,10 @@ pub(crate) fn walk_matches(
     generation: u64,
     current: Arc<AtomicU64>,
 ) -> SearchResults {
-    let needle = query.trim().to_lowercase();
+    let filter = parse_filter(query);
+    let needle = filter.terms.join(" ").to_lowercase();
 
-    if needle.is_empty() {
+    if needle.is_empty() && filter.extensions.is_empty() && filter.minimum_size.is_none() && filter.maximum_size.is_none() {
         return SearchResults {
             entries: Vec::new(),
             truncated: false,
@@ -174,6 +226,11 @@ pub(crate) fn walk_matches(
                 continue;
             }
 
+            let size = directory_entry.metadata().map(|metadata| metadata.len()).unwrap_or_default();
+            if !matches_filter(&filter, &name, size) {
+                continue;
+            }
+
             // A symlinked directory is not descended into, so a cycle cannot trap the walk.
             if directory_entry
                 .file_type()
@@ -183,7 +240,9 @@ pub(crate) fn walk_matches(
             }
 
             let folded = name.to_lowercase();
-            let score = if is_glob {
+            let score = if needle.is_empty() {
+                Some(50)
+            } else if is_glob {
                 matches_glob(&needle, &folded).then_some(50)
             } else {
                 match_score(&needle, &folded)
@@ -216,7 +275,7 @@ pub(crate) fn walk_matches(
 
 #[cfg(test)]
 mod tests {
-    use super::{match_score, matches_glob, walk_matches};
+    use super::{match_score, matches_filter, matches_glob, parse_filter, walk_matches};
     use std::{
         fs,
         path::PathBuf,
@@ -258,6 +317,16 @@ mod tests {
     fn a_trailing_star_still_needs_the_prefix() {
         assert!(matches_glob("a*b*", "axxbyy"));
         assert!(!matches_glob("a*b*", "xxbyy"));
+    }
+
+    #[test]
+    fn filters_by_common_type_and_size() {
+        let filter = parse_filter("type:image size:>1mb size:<5mb vacation");
+
+        assert_eq!(filter.terms, ["vacation"]);
+        assert!(matches_filter(&filter, "photo.JPG", 2 * 1024 * 1024));
+        assert!(!matches_filter(&filter, "photo.JPG", 6 * 1024 * 1024));
+        assert!(!matches_filter(&filter, "notes.txt", 2 * 1024 * 1024));
     }
 
     #[test]

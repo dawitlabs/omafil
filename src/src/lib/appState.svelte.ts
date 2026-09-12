@@ -121,6 +121,33 @@ class AppState {
     }, SAVE_DELAY_MS)
   }
 
+  /// A stored path follows the item it names when the app moves or renames it,
+  /// including everything underneath a renamed folder.
+  relocate(from: string, to: string) {
+    const rewrite = (path: string) => {
+      if (path === from) return to
+
+      return path.startsWith(`${from}/`) ? `${to}${path.slice(from.length)}` : path
+    }
+
+    this.pins = this.pins.map((pin) => {
+      const path = rewrite(pin.path)
+
+      return path === pin.path ? pin : { path, label: pin.path === from ? basename(to) : pin.label }
+    })
+
+    this.tagged = Object.fromEntries(Object.entries(this.tagged).map(([path, ids]) => [rewrite(path), ids]))
+    this.#persist()
+  }
+
+  forget(paths: string[]) {
+    const isGone = (candidate: string) => paths.some((path) => candidate === path || candidate.startsWith(`${path}/`))
+
+    this.pins = this.pins.filter((pin) => !isGone(pin.path))
+    this.tagged = Object.fromEntries(Object.entries(this.tagged).filter(([path]) => !isGone(path)))
+    this.#persist()
+  }
+
   isPinned(path: string): boolean {
     return this.pins.some((pin) => pin.path === path)
   }
@@ -147,7 +174,7 @@ class AppState {
 
   createTag(label: string): Tag {
     const color = tagColors[this.tags.length % tagColors.length]
-    const tag = { id: `${Date.now().toString(36)}`, label, color }
+    const tag = { id: crypto.randomUUID(), label, color }
 
     this.tags = [...this.tags, tag]
     this.#persist()

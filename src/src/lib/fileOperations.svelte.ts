@@ -1,8 +1,27 @@
 import { invoke } from '@tauri-apps/api/core'
+import { appState } from './appState.svelte'
 import { tabs } from './tabs.svelte'
 import type { DirectoryEntry } from './navigation.svelte'
+import { isTerminal, reconcileOperation, remainingCutPaths, type FileOperation } from './operationState'
+export type { FileOperation, TransferResult } from './operationState'
 
 export type ClipboardMode = 'copy' | 'cut'
+export type FileViewMode = 'details' | 'icons' | 'preview'
+export type TransferConflictPolicy = 'fail' | 'skip' | 'replace'
+export type TransferResolution = TransferConflictPolicy | 'rename'
+
+export type TransferConflict = {
+  sourcePath: string
+  destinationPath: string
+  name: string
+}
+
+type PendingTransfer = {
+  paths: string[]
+  destinationPath: string
+  isMove: boolean
+  conflicts: TransferConflict[]
+}
 
 function readableError(error: unknown, fallback: string): string {
   if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
@@ -32,8 +51,16 @@ class FileOperations {
   clipboardMode = $state<ClipboardMode | null>(null)
   renamingPath = $state<string | null>(null)
   renameDraft = $state('')
+  propertiesPath = $state<string | null>(null)
+  viewMode = $state<FileViewMode>('details')
+  pendingTransfer = $state<PendingTransfer | null>(null)
+  pendingPermanentDelete = $state<string[] | null>(null)
+  archiveDraft = $state('Archive.zip')
+  pendingArchivePaths = $state<string[] | null>(null)
+  externalDropPaths = $state<string[] | null>(null)
   error = $state<string | null>(null)
   isBusy = $state(false)
+  operations = $state<FileOperation[]>([])
 
   get entries(): DirectoryEntry[] {
     return tabs.active.entries
@@ -106,6 +133,18 @@ class FileOperations {
     this.clipboardMode = 'copy'
   }
 
+  copyPaths(paths: string[]) {
+    if (paths.length === 0) return
+    this.clipboardPaths = paths
+    this.clipboardMode = 'copy'
+  }
+
+  cutPaths(paths: string[]) {
+    if (paths.length === 0) return
+    this.clipboardPaths = paths
+    this.clipboardMode = 'cut'
+  }
+
   cutSelection() {
     if (this.selectedPaths.length === 0) return
 
@@ -122,6 +161,14 @@ class FileOperations {
 
   cancelRenaming() {
     this.renamingPath = null
+  }
+
+  showProperties(path: string = this.selectedPaths[0]) {
+    if (path) this.propertiesPath = path
+  }
+
+  hideProperties() {
+    this.propertiesPath = null
   }
 
   async #run(operation: () => Promise<unknown>, fallback: string): Promise<boolean> {
@@ -164,6 +211,7 @@ class FileOperations {
 
     await this.#run(async () => {
       const renamed = await invoke<string>('rename_path', { path, name })
+      appState.relocate(path, renamed)
       this.selectOnly(renamed)
     }, 'Unable to rename that item.')
   }
@@ -175,23 +223,169 @@ class FileOperations {
 
     const deleted = await this.#run(() => invoke('trash_paths', { paths }), 'Unable to move those items to the trash.')
 
-    if (deleted) this.clearSelection()
+    if (deleted) {
+      appState.forget(paths)
+      this.clearSelection()
+    }
+  }
+
+  requestPermanentDelete() {
+    if (this.selectedPaths.length > 0) this.pendingPermanentDelete = [...this.selectedPaths]
+  }
+
+  cancelPermanentDelete() {
+    this.pendingPermanentDelete = null
+  }
+
+  async confirmPermanentDelete() {
+    const paths = this.pendingPermanentDelete
+    if (!paths) return
+
+    this.pendingPermanentDelete = null
+    const deleted = await this.#run(() => invoke('permanently_delete_paths', { paths }), 'Unable to permanently delete those items.')
+    if (deleted) {
+      appState.forget(paths)
+      this.clearSelection()
+    }
+  }
+
+  async #transfer(paths: string[], destinationPath: string, isMove: boolean, conflictPolicy: TransferResolution): Promise<boolean> {
+    try {
+      const queued = await invoke<{ id: string }>('queue_transfer', { paths, destinationPath, isMove, conflictPolicy })
+      this.operations = reconcileOperation(this.operations, { id: queued.id, kind: isMove ? 'move' : 'copy', state: 'queued', completedItems: 0, totalItems: paths.length, completedBytes: 0, totalBytes: null, currentName: null })
+      return true
+    } catch (error) {
+      this.error = readableError(error, isMove ? 'Unable to queue those items to move.' : 'Unable to queue those items to copy.')
+      return false
+    }
+  }
+
+  receiveOperationUpdate(update: FileOperation) {
+    const previous = this.operations.find((operation) => operation.id === update.id)
+    if (previous && isTerminal(previous)) return
+    this.operations = reconcileOperation(this.operations, update)
+
+    if (isTerminal(update)) {
+      if (update.kind === 'move' && update.results) {
+        for (const result of update.results) {
+          if (!result.skipped) appState.relocate(result.sourcePath, result.destinationPath)
+        }
+        if (this.clipboardMode === 'cut') {
+          this.clipboardPaths = remainingCutPaths(this.clipboardPaths, update.results)
+          if (this.clipboardPaths.length === 0) this.clipboardMode = null
+        }
+      }
+      tabs.active.reload()
+    }
+  }
+
+  async cancelOperation(id: string) {
+    const operation = this.operations.find((candidate) => candidate.id === id)
+    if (!operation || isTerminal(operation) || operation.cancellationRequested) return
+    this.operations = this.operations.map((candidate) => candidate.id === id
+      ? { ...candidate, cancellationRequested: true, cancellationError: null } : candidate)
+    try {
+      const accepted = await invoke<boolean>('cancel_operation', { id })
+      if (!accepted) {
+        this.operations = this.operations.map((candidate) => candidate.id === id
+          ? { ...candidate, cancellationRequested: false } : candidate)
+      }
+    } catch (error) {
+      this.operations = this.operations.map((candidate) => candidate.id === id
+        ? { ...candidate, cancellationRequested: false, cancellationError: readableError(error, 'Unable to cancel this operation. Try again.') } : candidate)
+    }
+  }
+
+  dismissOperation(id: string) {
+    this.operations = this.operations.filter((operation) => operation.id !== id)
+  }
+
+  async beginTransfer(paths: string[], destinationPath: string, isMove: boolean) {
+    if (paths.length === 0 || !destinationPath) return
+
+    this.error = null
+
+    try {
+      const conflicts = await invoke<TransferConflict[]>('transfer_conflicts', { paths, destinationPath })
+
+      if (conflicts.length > 0) {
+        this.pendingTransfer = { paths, destinationPath, isMove, conflicts }
+        return
+      }
+
+      await this.#transfer(paths, destinationPath, isMove, 'fail')
+    } catch (error) {
+      this.error = readableError(error, 'Unable to prepare that transfer.')
+    }
+  }
+
+  async resolvePendingTransfer(policy: Exclude<TransferResolution, 'fail'>) {
+    const pending = this.pendingTransfer
+
+    if (!pending) return
+
+    this.pendingTransfer = null
+    await this.#transfer(pending.paths, pending.destinationPath, pending.isMove, policy)
+  }
+
+  cancelPendingTransfer() {
+    this.pendingTransfer = null
   }
 
   async paste() {
     if (!this.canPaste) return
 
-    const paths = this.clipboardPaths
-    const isMove = this.clipboardMode === 'cut'
-    const pasted = await this.#run(
-      () => invoke('transfer_paths', { paths, destinationPath: this.directoryPath, isMove }),
-      isMove ? 'Unable to move those items here.' : 'Unable to copy those items here.',
-    )
+    await this.beginTransfer(this.clipboardPaths, this.directoryPath, this.clipboardMode === 'cut')
+  }
 
-    if (pasted && isMove) {
-      this.clipboardPaths = []
-      this.clipboardMode = null
+  async pasteTo(destinationPath: string) {
+    if (this.clipboardMode === null || this.clipboardPaths.length === 0) return
+    await this.beginTransfer(this.clipboardPaths, destinationPath, this.clipboardMode === 'cut')
+  }
+
+  async compressSelection() {
+    const paths = this.selectedPaths
+    if (paths.length === 0 || !this.directoryPath) return
+    this.archiveDraft = paths.length === 1 ? `${this.entries.find((entry) => entry.path === paths[0])?.name ?? 'Archive'}.zip` : 'Archive.zip'
+    this.pendingArchivePaths = [...paths]
+  }
+
+  cancelArchive() { this.pendingArchivePaths = null }
+
+  async createArchive() {
+    const paths = this.pendingArchivePaths
+    const name = this.archiveDraft.trim()
+    if (!paths || !name || !this.directoryPath) return
+    this.pendingArchivePaths = null
+    try {
+      const queued = await invoke<{ id: string }>('queue_create_zip', { paths, destinationPath: this.directoryPath, name })
+      this.operations = reconcileOperation(this.operations, { id: queued.id, kind: 'compress', state: 'queued', completedItems: 0, totalItems: 1, completedBytes: 0, totalBytes: null, currentName: name })
+    } catch (error) {
+      this.error = readableError(error, 'Unable to queue the ZIP archive.')
     }
+  }
+
+  async extractSelection() {
+    const path = this.selectedPaths[0]
+    if (!path || !this.directoryPath || !path.toLowerCase().endsWith('.zip')) return
+    try {
+      const queued = await invoke<{ id: string }>('queue_extract_zip', { path, destinationPath: this.directoryPath })
+      this.operations = reconcileOperation(this.operations, { id: queued.id, kind: 'extract', state: 'queued', completedItems: 0, totalItems: 1, completedBytes: 0, totalBytes: null, currentName: path.split('/').at(-1) ?? path })
+    } catch (error) {
+      this.error = readableError(error, 'Unable to queue this ZIP extraction.')
+    }
+  }
+
+  async moveSelectionTo(destinationPath: string, copy = false) {
+    await this.movePathsTo(this.selectedPaths, destinationPath, copy)
+  }
+
+  async movePathsTo(paths: string[], destinationPath: string, copy = false) {
+    await this.beginTransfer(paths, destinationPath, !copy)
+  }
+
+  async importDroppedPaths(paths: string[]) {
+    await this.beginTransfer(paths, this.directoryPath, false)
   }
 }
 

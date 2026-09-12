@@ -21,7 +21,10 @@ export type DirectoryListing = {
   crumbs: PathCrumb[]
   entries: DirectoryEntry[]
   total: number
+  hasMore: boolean
 }
+
+const DIRECTORY_PAGE_SIZE = 300
 
 const descendingByDefault: EntrySort[] = ['size', 'modified']
 
@@ -53,6 +56,7 @@ export type SearchResults = {
 export type View =
   | { kind: 'home' }
   | { kind: 'settings' }
+  | { kind: 'recycle' }
   | { kind: 'folder'; path: string }
   | { kind: 'search'; path: string; query: string }
   | { kind: 'tag'; id: string; label: string }
@@ -77,7 +81,9 @@ export class Navigation {
 
   listing = $state<DirectoryListing | null>(null)
   results = $state<SearchResults | null>(null)
+  missingTagged = $state(0)
   isLoading = $state(false)
+  isLoadingMore = $state(false)
   error = $state<string | null>(null)
   #sort = $state<EntrySort | null>(null)
   #descending = $state<boolean | null>(null)
@@ -128,6 +134,10 @@ export class Navigation {
     return this.view.kind === 'search' && (this.results?.truncated ?? false)
   }
 
+  get hasMoreEntries(): boolean {
+    return this.view.kind === 'folder' && (this.listing?.hasMore ?? false)
+  }
+
   get directoryPath(): string {
     return this.view.kind === 'folder' ? (this.listing?.path ?? '') : ''
   }
@@ -143,6 +153,7 @@ export class Navigation {
 
     if (view.kind === 'home') return 'Home'
     if (view.kind === 'settings') return 'Settings'
+    if (view.kind === 'recycle') return 'Recycle Bin'
     if (view.kind === 'placeholder') return view.label
     if (view.kind === 'tag') return view.label
     if (view.kind === 'search') return `Search: ${view.query}`
@@ -162,6 +173,10 @@ export class Navigation {
 
   openSettings() {
     this.#push({ kind: 'settings' })
+  }
+
+  openRecycleBin() {
+    this.#push({ kind: 'recycle' })
   }
 
   openPlaceholder(label: string) {
@@ -249,6 +264,12 @@ export class Navigation {
     void this.#load()
   }
 
+  loadMore() {
+    const listing = this.listing
+    if (this.view.kind !== 'folder' || !listing?.hasMore || this.isLoadingMore) return
+    void this.#loadMore(listing)
+  }
+
   sortBy(sort: EntrySort) {
     this.#descending = this.sort === sort ? !this.descending : descendingByDefault.includes(sort)
     this.#sort = sort
@@ -275,8 +296,9 @@ export class Navigation {
     const view = this.view
     const requestId = ++this.#requestSequence
     this.error = null
+    this.missingTagged = 0
 
-    if (view.kind === 'home' || view.kind === 'placeholder' || view.kind === 'settings') {
+    if (view.kind === 'home' || view.kind === 'placeholder' || view.kind === 'settings' || view.kind === 'recycle') {
       this.listing = null
       this.results = null
       this.isLoading = false
@@ -292,6 +314,8 @@ export class Navigation {
           sort: this.sort,
           descending: this.descending,
           showHidden: appState.settings.showHidden,
+          offset: 0,
+          limit: DIRECTORY_PAGE_SIZE,
         })
 
         if (requestId === this.#requestSequence) {
@@ -310,11 +334,12 @@ export class Navigation {
           this.results = results
         }
       } else {
-        const entries = await this.#describeTagged(view.id)
+        const described = await this.#describeTagged(view.id)
 
         if (requestId === this.#requestSequence) {
           this.listing = null
-          this.results = { entries, truncated: false }
+          this.results = { entries: described.entries, truncated: false }
+          this.missingTagged = described.missing
         }
       }
     } catch (error) {
@@ -328,11 +353,40 @@ export class Navigation {
     }
   }
 
-  async #describeTagged(id: string): Promise<DirectoryEntry[]> {
+  async #describeTagged(id: string): Promise<{ entries: DirectoryEntry[]; missing: number }> {
     const described = await Promise.all(
       appState.pathsWithTag(id).map((path) => invoke<DirectoryEntry | null>('describe_path', { path }).catch(() => null)),
     )
+    const entries = described.filter((entry): entry is DirectoryEntry => entry !== null)
 
-    return described.filter((entry): entry is DirectoryEntry => entry !== null)
+    // Not pruned: a tagged item on an unmounted drive is unreachable, not gone.
+    return { entries, missing: described.length - entries.length }
+  }
+
+  async #loadMore(current: DirectoryListing) {
+    const view = this.view
+    if (view.kind !== 'folder') return
+
+    const requestId = this.#requestSequence
+    this.isLoadingMore = true
+
+    try {
+      const next = await invoke<DirectoryListing>('list_directory', {
+        path: view.path,
+        sort: this.sort,
+        descending: this.descending,
+        showHidden: appState.settings.showHidden,
+        offset: current.entries.length,
+        limit: DIRECTORY_PAGE_SIZE,
+      })
+
+      if (requestId === this.#requestSequence && this.listing?.path === current.path) {
+        this.listing = { ...next, entries: [...current.entries, ...next.entries] }
+      }
+    } catch (error) {
+      if (requestId === this.#requestSequence) this.error = readableError(error, 'Unable to load more items.')
+    } finally {
+      if (requestId === this.#requestSequence) this.isLoadingMore = false
+    }
   }
 }

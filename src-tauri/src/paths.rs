@@ -78,6 +78,19 @@ pub(crate) fn resolve_navigable_path(path: &str) -> Result<PathBuf, DirectoryErr
         .ok_or_else(DirectoryError::not_allowed)
 }
 
+/// Resolve the parent, preserving the final entry (including dangling symlinks).
+pub(crate) fn resolve_entry_path(path: &str) -> Result<PathBuf, DirectoryError> {
+    let path = Path::new(path);
+    let name = path.file_name().ok_or_else(DirectoryError::unavailable)?;
+    let parent = path.parent().ok_or_else(DirectoryError::unavailable)?;
+    let parent = resolve_navigable_path(&parent.to_string_lossy())?;
+    let entry = parent.join(name);
+    entry
+        .symlink_metadata()
+        .map_err(|_| DirectoryError::unavailable())?;
+    Ok(entry)
+}
+
 pub(crate) fn display_name(directory: &Path) -> String {
     directory
         .file_name()
