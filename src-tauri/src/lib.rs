@@ -2,6 +2,7 @@ mod drives;
 mod archive;
 mod error;
 mod inspect;
+mod launch;
 mod listing;
 mod omarchy;
 mod operations;
@@ -64,6 +65,20 @@ async fn open_path(path: String) -> Result<(), DirectoryError> {
         .map_err(|_| DirectoryError::open_failed())??;
 
     tauri_plugin_opener::open_path(target, None::<&str>).map_err(|_| DirectoryError::open_failed())
+}
+
+#[tauri::command]
+async fn open_terminal(path: String) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || launch::open_terminal(&path))
+        .await
+        .map_err(|_| DirectoryError::open_failed())?
+}
+
+#[tauri::command]
+async fn open_in_editor(path: String) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || launch::open_editor(&path))
+        .await
+        .map_err(|_| DirectoryError::open_failed())?
 }
 
 #[tauri::command]
@@ -269,6 +284,8 @@ pub fn run() {
             resolve_location,
             list_directory,
             open_path,
+            open_terminal,
+            open_in_editor,
             new_directory,
             rename_path,
             trash_paths,

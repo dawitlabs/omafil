@@ -3,16 +3,20 @@
   align-items: center;
   gap: 2px;
   margin-bottom: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
 .file-commands__button {
   height: 30px;
-  padding: 0 12px;
+  padding: 0 9px;
   border: 0;
   border-radius: 4px;
   color: var(--text-primary);
   background: transparent;
   font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
   cursor: pointer;
 }
 

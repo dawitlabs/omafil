@@ -231,12 +231,24 @@ export class Navigation {
   }
 
   async openExternally(path: string) {
+    await this.#launch('open_path', path, 'Unable to open this item.')
+  }
+
+  async openTerminal(path = this.directoryPath) {
+    if (path) await this.#launch('open_terminal', path, 'Unable to open a terminal here.')
+  }
+
+  async openInEditor(path: string) {
+    await this.#launch('open_in_editor', path, 'Unable to open this file in your editor.')
+  }
+
+  async #launch(command: string, path: string, fallback: string) {
     this.error = null
 
     try {
-      await invoke('open_path', { path })
+      await invoke(command, { path })
     } catch (error) {
-      this.error = readableError(error, 'Unable to open this item.')
+      this.error = readableError(error, fallback)
     }
   }
 

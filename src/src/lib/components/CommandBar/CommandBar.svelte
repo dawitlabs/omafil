@@ -1,5 +1,6 @@
 <script lang="ts">
   import { fileOperations } from '../../fileOperations.svelte'
+  import { tabs } from '../../tabs.svelte'
 
   const inFolder = $derived(fileOperations.directoryPath !== '')
   const hasSelection = $derived(fileOperations.selectedPaths.length > 0)
@@ -19,6 +20,7 @@
   <button class="file-commands__button" type="button" disabled={!hasSingleSelection} onclick={() => fileOperations.extractSelection()}>Extract</button>
   <span class="file-commands__divider" aria-hidden="true"></span>
   <button class="file-commands__button" type="button" disabled={!hasSingleSelection} onclick={() => fileOperations.showProperties()}>Properties</button>
+  <button class="file-commands__button" type="button" disabled={!inFolder} title="Open a terminal in this folder (F4)" onclick={() => tabs.active.openTerminal()}>Terminal</button>
   <span class="file-commands__divider" aria-hidden="true"></span>
   <button class="file-commands__button" type="button" aria-pressed={fileOperations.viewMode === 'details'} onclick={() => (fileOperations.viewMode = 'details')}>Details</button>
   <button class="file-commands__button" type="button" aria-pressed={fileOperations.viewMode === 'icons'} onclick={() => (fileOperations.viewMode = 'icons')}>Icons</button>

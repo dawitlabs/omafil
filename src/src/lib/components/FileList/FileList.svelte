@@ -75,6 +75,8 @@
       y: event.clientY,
       items: [
         { kind: 'action', label: 'Open', onSelect: () => tabs.active.openEntry(entry) },
+        ...(entry.entryType === 'file' ? [{ kind: 'action', label: 'Edit', onSelect: () => tabs.active.openInEditor(entry.path) } as ContextMenuItem] : []),
+        { kind: 'action', label: entry.entryType === 'directory' ? 'Open in terminal' : 'Open folder in terminal', shortcut: 'F4', onSelect: () => tabs.active.openTerminal(entry.path) },
         { kind: 'separator' },
         { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: () => fileOperations.cutSelection() },
         { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => fileOperations.copySelection() },
@@ -135,6 +137,7 @@
         { kind: 'separator' },
         { kind: 'action', label: 'Paste', shortcut: 'Ctrl+V', disabled: !fileOperations.canPaste, onSelect: () => fileOperations.paste() },
         { kind: 'separator' },
+        { kind: 'action', label: 'Open in terminal', shortcut: 'F4', disabled: !fileOperations.directoryPath, onSelect: () => tabs.active.openTerminal() },
         { kind: 'action', label: 'Refresh', onSelect: () => tabs.active.reload() },
       ],
     }
@@ -255,6 +258,7 @@
     else if (event.altKey && event.key === 'Enter') fileOperations.showProperties()
     else if (event.key === 'Enter' && entry) void tabs.active.openEntry(entry)
     else if (event.key === 'F2') fileOperations.startRenaming()
+    else if (event.key === 'F4') void tabs.active.openTerminal()
     else if (event.shiftKey && event.key === 'Delete') fileOperations.requestPermanentDelete()
     else if (event.key === 'Delete') void fileOperations.deleteSelection()
     else if (event.key === 'Escape') fileOperations.clearSelection()
