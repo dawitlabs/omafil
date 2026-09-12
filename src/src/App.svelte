@@ -14,27 +14,31 @@
   import { driveStore } from './lib/drives.svelte'
   import { fileOperations } from './lib/fileOperations.svelte'
   import { tabs } from './lib/tabs.svelte'
+  import type { Navigation } from './lib/navigation.svelte'
 
-  let watchedPath = $state<string | null>(null)
+  let watchedKey = ''
 
   onMount(() => {
     void appState.load()
     void invoke<string | null>('startup_path').then((path) => {
       if (path) tabs.active.open(path)
     })
-    let reloadTimer: ReturnType<typeof setTimeout> | null = null
+    const reloadTimers = new Map<string, ReturnType<typeof setTimeout>>()
+    const visiblePanes = () => [tabs.tab, tabs.tab.split].filter((pane): pane is Navigation => pane !== null)
 
     const stopListening = listen<string>('directory-changed', (event) => {
-      if (event.payload !== tabs.active.directoryPath) return
+      const changed = event.payload
+      if (!visiblePanes().some((pane) => pane.directoryPath === changed)) return
 
       // Linux file managers and media players commonly produce a burst of
       // inotify events for one user action. Reload once after that burst,
       // rather than replacing the entire folder view for every event.
-      if (reloadTimer) clearTimeout(reloadTimer)
-      reloadTimer = setTimeout(() => {
-        reloadTimer = null
-        if (event.payload === tabs.active.directoryPath) tabs.active.reload()
-      }, 450)
+      const pending = reloadTimers.get(changed)
+      if (pending) clearTimeout(pending)
+      reloadTimers.set(changed, setTimeout(() => {
+        reloadTimers.delete(changed)
+        for (const pane of visiblePanes()) if (pane.directoryPath === changed) pane.reload()
+      }, 450))
     })
 
     const stopOperationListening = listen<import('./lib/fileOperations.svelte').FileOperation>('file-operation', (event) => {
@@ -65,22 +69,22 @@
       void stopThemeListening.then((stop) => stop())
       void stopDriveListening.then((stop) => stop())
       void stopDropListening.then((stop) => stop())
-      if (reloadTimer) clearTimeout(reloadTimer)
+      for (const timer of reloadTimers.values()) clearTimeout(timer)
       void invoke('unwatch_directory')
     }
   })
 
-  // Only the visible folder is watched; switching tabs re-points the watcher.
+  // Every visible pane is watched; switching tabs re-points the watchers.
   $effect(() => {
-    const path = tabs.active.directoryPath
+    const paths = [tabs.tab.directoryPath, tabs.tab.split?.directoryPath ?? ''].filter(Boolean)
+    const key = paths.join('\n')
 
     // Reloading replaces the listing object even when its path is unchanged.
-    // Do not tear down and recreate the native watcher for that same folder.
-    if (path === watchedPath) return
+    // Do not tear down and recreate native watchers for the same folders.
+    if (key === watchedKey) return
 
-    watchedPath = path || null
-    if (path) void invoke('watch_directory', { path }).catch(() => {})
-    else void invoke('unwatch_directory')
+    watchedKey = key
+    void invoke('watch_directories', { paths }).catch(() => {})
   })
 </script>
 

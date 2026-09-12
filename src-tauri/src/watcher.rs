@@ -2,6 +2,7 @@ use crate::error::DirectoryError;
 use crate::paths::resolve_navigable_path;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::{
+    collections::HashMap,
     path::PathBuf,
     sync::{mpsc, Mutex},
     thread,
@@ -20,31 +21,37 @@ fn changes_directory_contents(event: &Event) -> bool {
 
 #[derive(Default)]
 pub(crate) struct DirectoryWatcher {
-    active: Mutex<Option<RecommendedWatcher>>,
+    active: Mutex<HashMap<String, RecommendedWatcher>>,
 }
 
 impl DirectoryWatcher {
-    pub(crate) fn watch<F>(&self, path: &str, on_change: F) -> Result<(), DirectoryError>
+    /// Makes the watched set equal to `paths`: dropped watchers end their
+    /// threads, folders already watched are left alone.
+    pub(crate) fn sync<F>(&self, paths: &[String], on_change: F) -> Result<(), DirectoryError>
     where
-        F: Fn(String) + Send + 'static,
+        F: Fn(String) + Send + Clone + 'static,
     {
-        let directory = resolve_navigable_path(path)?;
+        let mut active = self.active.lock().map_err(|_| DirectoryError::read_failed())?;
+        active.retain(|path, _| paths.contains(path));
 
-        if !directory.is_dir() {
-            return Err(DirectoryError::unavailable());
+        for path in paths {
+            if active.contains_key(path) {
+                continue;
+            }
+            let directory = resolve_navigable_path(path)?;
+            if !directory.is_dir() {
+                continue;
+            }
+            let watcher = start_watch(directory, on_change.clone()).map_err(|_| DirectoryError::read_failed())?;
+            active.insert(path.clone(), watcher);
         }
-
-        let watcher = start_watch(directory, on_change).map_err(|_| DirectoryError::read_failed())?;
-        // Dropping the previous watcher ends its thread, so only one directory
-        // is ever being reported on.
-        *self.active.lock().map_err(|_| DirectoryError::read_failed())? = Some(watcher);
 
         Ok(())
     }
 
     pub(crate) fn stop(&self) {
         if let Ok(mut active) = self.active.lock() {
-            *active = None;
+            active.clear();
         }
     }
 }

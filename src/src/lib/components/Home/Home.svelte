@@ -19,7 +19,7 @@
   import { formatBytes, formatItems, formatModified } from '../../format'
   import { tabs } from '../../tabs.svelte'
   import { driveStore } from '../../drives.svelte'
-  import type { DriveInfo, RecentFile } from '../../navigation.svelte'
+  import type { DriveInfo, Navigation, RecentFile } from '../../navigation.svelte'
 
   type RecycleItem = { id: string; name: string; originalPath: string; deletedAt: number }
 
@@ -91,6 +91,17 @@
   })
 
   $effect(() => { if (tabs.active.view.kind === 'recycle') void loadRecycleBin() })
+
+  // Only listings can share the screen; a pane that leaves for Home, Settings
+  // or the Recycle Bin takes the whole tab with it.
+  $effect(() => {
+    const tab = tabs.tab
+    if (!tab.split) return
+    const isListing = (pane: Navigation) => pane.view.kind === 'folder' || pane.view.kind === 'search'
+
+    if (!isListing(tab.split)) tabs.collapseSplit(tab.split)
+    else if (!isListing(tab)) tabs.collapseSplit(tab)
+  })
 </script>
 
 <div class="home-screen">

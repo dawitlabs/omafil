@@ -282,12 +282,12 @@ async fn search_files(
 }
 
 #[tauri::command]
-fn watch_directory(
-    path: String,
+fn watch_directories(
+    paths: Vec<String>,
     app: tauri::AppHandle,
     watcher: State<'_, DirectoryWatcher>,
 ) -> Result<(), DirectoryError> {
-    watcher.watch(&path, move |changed| {
+    watcher.sync(&paths, move |changed| {
         let _ = app.emit("directory-changed", changed);
     })
 }
@@ -408,7 +408,7 @@ pub fn run() {
             set_permissions,
             describe_path,
             search_files,
-            watch_directory,
+            watch_directories,
             unwatch_directory,
             read_omarchy_theme,
             startup_path,

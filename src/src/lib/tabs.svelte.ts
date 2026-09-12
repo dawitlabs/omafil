@@ -45,6 +45,18 @@ class Tabs {
     this.focusedSide = 'right'
   }
 
+  /** Ends the split, keeping `keep` as the tab's only pane. */
+  collapseSplit(keep: Navigation) {
+    const tab = this.tab
+    if (!tab.split) return
+
+    if (keep === tab.split) {
+      this.#tabs = this.#tabs.map((candidate, index) => (index === this.activeIndex ? keep : candidate))
+    }
+    tab.split = null
+    this.focusedSide = 'left'
+  }
+
   focus(pane: Navigation) {
     const side = pane === this.tab.split ? 'right' : 'left'
     if (side === this.focusedSide) return
