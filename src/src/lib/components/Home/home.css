@@ -298,3 +298,8 @@
     display: none;
   }
 }
+
+.home-view__drive-card--unmounted { outline: 1px dashed var(--border-strong); outline-offset: -1px; }
+.home-view__drive-card--unmounted strong { color: var(--text-secondary); }
+.home-view__drive-hint { color: var(--text-accent); }
+.home-view__state--error { color: var(--text-danger); }

@@ -16,7 +16,7 @@ mod search;
 mod store;
 mod watcher;
 
-use crate::drives::{read_drives, DriveInfo};
+use crate::drives::{read_drives, DriveInfo, DriveWatcher};
 use crate::archive::{create_zip as write_zip, extract_zip as unpack_zip};
 use crate::error::{DirectoryError, DriveError, RecentFilesError};
 use crate::listing::{
@@ -94,6 +94,27 @@ async fn open_with(path: String, desktop_id: String) -> Result<(), DirectoryErro
     tauri::async_runtime::spawn_blocking(move || openers::open_with(path, desktop_id))
         .await
         .map_err(|_| DirectoryError::open_failed())?
+}
+
+#[tauri::command]
+async fn mount_drive(device: String) -> Result<String, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || drives::mount_drive(&device))
+        .await
+        .map_err(|_| DirectoryError::operation_failed())?
+}
+
+#[tauri::command]
+async fn unmount_drive(device: String) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || drives::unmount_drive(&device))
+        .await
+        .map_err(|_| DirectoryError::operation_failed())?
+}
+
+#[tauri::command]
+async fn eject_drive(device: String) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || drives::eject_drive(&device))
+        .await
+        .map_err(|_| DirectoryError::operation_failed())?
 }
 
 #[tauri::command]
@@ -300,6 +321,17 @@ pub fn run() {
             }) {
                 app.manage(theme_watcher);
             }
+
+            // udev keeps this directory in step with attached block devices.
+            let by_path = std::path::PathBuf::from("/dev/disk/by-path");
+            let drive_handle = app.handle().clone();
+            if by_path.is_dir() {
+                if let Ok(drive_watcher) = crate::watcher::start_watch(by_path, move |_| {
+                    let _ = drive_handle.emit("drives-changed", ());
+                }) {
+                    app.manage(DriveWatcher(drive_watcher));
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -310,6 +342,9 @@ pub fn run() {
             open_in_editor,
             list_openers,
             open_with,
+            mount_drive,
+            unmount_drive,
+            eject_drive,
             new_directory,
             rename_path,
             trash_paths,

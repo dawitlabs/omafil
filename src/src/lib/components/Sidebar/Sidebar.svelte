@@ -19,6 +19,7 @@
   import ContextMenu from '../ContextMenu/ContextMenu.svelte'
   import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
   import { appState } from '../../appState.svelte'
+  import { driveStore } from '../../drives.svelte'
   import { fileOperations } from '../../fileOperations.svelte'
   import { knownLocations } from '../../navigation.svelte'
   import type { DriveInfo, KnownLocation } from '../../navigation.svelte'
@@ -39,8 +40,6 @@
     { location: 'music', label: 'Music', icon: MusicIcon },
   ]
 
-  let drives = $state<DriveInfo[]>([])
-  let drivesError = $state(false)
   let locationPaths = $state<Partial<Record<KnownLocation, string>>>({})
   let newTagLabel = $state<string | null>(null)
   let menu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null)
@@ -72,15 +71,9 @@
     newTagLabel = null
   }
 
-  async function loadDrives() {
-    drivesError = false
-
-    try {
-      drives = await invoke<DriveInfo[]>('list_drives')
-    } catch {
-      drives = []
-      drivesError = true
-    }
+  async function openDrive(drive: DriveInfo) {
+    const path = await driveStore.open(drive)
+    if (path) active.open(path)
   }
 
   async function loadLocationPaths() {
@@ -98,7 +91,7 @@
   }
 
   onMount(() => {
-    void loadDrives()
+    void driveStore.load()
     void loadLocationPaths()
   })
 </script>
@@ -182,24 +175,31 @@
       <span>Drives</span>
     </h2>
     <nav class="file-sidebar__nav" aria-label="Drives">
-      {#if drivesError}
+      {#if driveStore.error}
         <span class="file-sidebar__empty-state">Unable to load drives</span>
-      {:else if drives.length === 0}
-        <span class="file-sidebar__empty-state">No mounted drives</span>
+      {:else if driveStore.drives.length === 0}
+        <span class="file-sidebar__empty-state">No drives</span>
       {:else}
-        {#each drives as drive (drive.mountPoint)}
+        {#each driveStore.drives as drive (drive.device ?? drive.mountPoint)}
           <button
             class="file-sidebar__item"
-            class:file-sidebar__item--active={active.isCurrentPath(drive.path)}
+            class:file-sidebar__item--active={drive.isMounted && active.isCurrentPath(drive.path)}
+            class:file-sidebar__item--unmounted={!drive.isMounted}
             type="button"
-            aria-current={active.isCurrentPath(drive.path) ? 'page' : undefined}
-            onclick={() => active.open(drive.path)}
-            oncontextmenu={(event) => openMenu(event, [{ kind: 'action', label: 'Open', onSelect: () => active.open(drive.path) }, { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.open(); tabs.active.open(drive.path) } }, { kind: 'separator' }, { kind: 'action', label: appState.isPinned(drive.path) ? 'Unpin from sidebar' : 'Pin to sidebar', onSelect: () => appState.togglePin(drive.path) }, { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(drive.path) }])}
+            aria-current={drive.isMounted && active.isCurrentPath(drive.path) ? 'page' : undefined}
+            title={drive.isMounted ? undefined : 'Not mounted. Click to mount.'}
+            onclick={() => openDrive(drive)}
+            oncontextmenu={(event) => openMenu(event, drive.isMounted
+              ? [...driveStore.menuItems(drive, (path) => active.open(path)), { kind: 'separator' }, { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.open(); tabs.active.open(drive.path) } }, { kind: 'action', label: appState.isPinned(drive.path) ? 'Unpin from sidebar' : 'Pin to sidebar', onSelect: () => appState.togglePin(drive.path) }, { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(drive.path) }]
+              : driveStore.menuItems(drive, (path) => active.open(path)))}
           >
             <span class="masked-icon file-sidebar__icon" style="--icon: url({drive.isRemovable ? UsbStickIcon : HardDriveIcon})" aria-hidden="true"></span>
             <span>{drive.name || drive.mountPoint}</span>
           </button>
         {/each}
+      {/if}
+      {#if driveStore.actionError}
+        <span class="file-sidebar__empty-state file-sidebar__empty-state--error" role="alert">{driveStore.actionError}</span>
       {/if}
     </nav>
   </section>

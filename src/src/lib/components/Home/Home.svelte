@@ -18,13 +18,11 @@
   import { fileOperations } from '../../fileOperations.svelte'
   import { formatBytes, formatItems, formatModified } from '../../format'
   import { tabs } from '../../tabs.svelte'
+  import { driveStore } from '../../drives.svelte'
   import type { DriveInfo, RecentFile } from '../../navigation.svelte'
 
   type RecycleItem = { id: string; name: string; originalPath: string; deletedAt: number }
 
-  let drives = $state<DriveInfo[]>([])
-  let isLoadingDrives = $state(true)
-  let drivesError = $state<string | null>(null)
   let recentFiles = $state<RecentFile[]>([])
   let isLoadingRecentFiles = $state(true)
   let recentFilesError = $state<string | null>(null)
@@ -48,17 +46,9 @@
     return Math.min(100, Math.max(0, ((drive.totalBytes - drive.availableBytes) / drive.totalBytes) * 100))
   }
 
-  async function loadDrives() {
-    isLoadingDrives = true
-    drivesError = null
-
-    try {
-      drives = await invoke<DriveInfo[]>('list_drives')
-    } catch (error) {
-      drivesError = readableError(error, 'Unable to discover mounted drives.')
-    } finally {
-      isLoadingDrives = false
-    }
+  async function openDrive(drive: DriveInfo) {
+    const path = await driveStore.open(drive)
+    if (path) tabs.active.open(path)
   }
 
   async function loadRecentFiles() {
@@ -96,7 +86,7 @@
   }
 
   onMount(() => {
-    void loadDrives()
+    void driveStore.load()
     void loadRecentFiles()
   })
 
@@ -144,19 +134,19 @@
         <h2 id="drives-heading" class="home-view__heading">
           <span class="masked-icon home-view__heading-icon" style="--icon: url({HardDriveIcon})" aria-hidden="true"></span><span>Drives</span>
         </h2>
-        {#if isLoadingDrives}
-          <p class="home-view__state">Discovering mounted drives…</p>
-        {:else if drivesError}
+        {#if driveStore.isLoading}
+          <p class="home-view__state">Discovering drives…</p>
+        {:else if driveStore.error}
           <div class="home-view__error" role="alert">
-            <p>{drivesError}</p>
-            <button class="home-view__retry" type="button" onclick={loadDrives}>Try again</button>
+            <p>{driveStore.error}</p>
+            <button class="home-view__retry" type="button" onclick={() => driveStore.load()}>Try again</button>
           </div>
-        {:else if drives.length === 0}
-          <p class="home-view__state">No mounted drives are available.</p>
+        {:else if driveStore.drives.length === 0}
+          <p class="home-view__state">No drives are available.</p>
         {:else}
           <div class="home-view__drive-grid">
-            {#each drives as drive (drive.mountPoint)}
-              <button class="home-view__drive-card" type="button" onclick={() => tabs.active.open(drive.path)} aria-label={`Open ${drive.name || drive.mountPoint}`}>
+            {#each driveStore.drives as drive (drive.device ?? drive.mountPoint)}
+              <button class="home-view__drive-card" class:home-view__drive-card--unmounted={!drive.isMounted} type="button" onclick={() => openDrive(drive)} aria-label={`${drive.isMounted ? 'Open' : 'Mount'} ${drive.name || drive.mountPoint}`} oncontextmenu={(event) => { event.preventDefault(); menu = { x: event.clientX, y: event.clientY, items: driveStore.menuItems(drive, (path) => tabs.active.open(path)) } }}>
                 <span
                   class="masked-icon home-view__drive-icon"
                   class:home-view__drive-icon--removable={drive.isRemovable}
@@ -165,15 +155,21 @@
                 ></span>
                 <span class="home-view__drive-content">
                   <strong>{drive.name || drive.mountPoint}</strong>
-                  <span>{formatBytes(drive.availableBytes)} free of {formatBytes(drive.totalBytes)}</span>
-                  <span class="home-view__progress" aria-label={`${Math.round(usedPercentage(drive))} percent used`}>
-                    <span class="home-view__progress-fill" style:width={`${usedPercentage(drive)}%`}></span>
-                  </span>
+                  {#if drive.isMounted}
+                    <span>{formatBytes(drive.availableBytes)} free of {formatBytes(drive.totalBytes)}</span>
+                    <span class="home-view__progress" aria-label={`${Math.round(usedPercentage(drive))} percent used`}>
+                      <span class="home-view__progress-fill" style:width={`${usedPercentage(drive)}%`}></span>
+                    </span>
+                  {:else}
+                    <span>{formatBytes(drive.totalBytes)} · not mounted</span>
+                    <span class="home-view__drive-hint">Click to mount</span>
+                  {/if}
                 </span>
               </button>
             {/each}
           </div>
         {/if}
+        {#if driveStore.actionError}<p class="home-view__state home-view__state--error" role="alert">{driveStore.actionError}</p>{/if}
       </section>
 
       <section class="home-view__section" aria-labelledby="recent-heading">

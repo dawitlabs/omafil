@@ -143,3 +143,6 @@
   background: var(--scrollbar-thumb);
   background-clip: padding-box;
 }
+
+.file-sidebar__item--unmounted { color: var(--text-muted); }
+.file-sidebar__empty-state--error { color: var(--text-danger); }

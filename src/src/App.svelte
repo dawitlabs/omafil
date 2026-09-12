@@ -10,6 +10,7 @@
   import Home from './lib/components/Home/Home.svelte'
   import Sidebar from './lib/components/Sidebar/Sidebar.svelte'
   import { appState } from './lib/appState.svelte'
+  import { driveStore } from './lib/drives.svelte'
   import { fileOperations } from './lib/fileOperations.svelte'
   import { tabs } from './lib/tabs.svelte'
 
@@ -40,6 +41,10 @@
       void appState.refreshOmarchyTheme()
     })
 
+    const stopDriveListening = listen('drives-changed', () => {
+      void driveStore.load()
+    })
+
     const stopDropListening = getCurrentWindow().onDragDropEvent((event) => {
       if (event.payload.type === 'enter') fileOperations.externalDropPaths = event.payload.paths
       else if (event.payload.type === 'leave') fileOperations.externalDropPaths = null
@@ -54,6 +59,7 @@
       void stopListening.then((stop) => stop())
       void stopOperationListening.then((stop) => stop())
       void stopThemeListening.then((stop) => stop())
+      void stopDriveListening.then((stop) => stop())
       void stopDropListening.then((stop) => stop())
       if (reloadTimer) clearTimeout(reloadTimer)
       void invoke('unwatch_directory')

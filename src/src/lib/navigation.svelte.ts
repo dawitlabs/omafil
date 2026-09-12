@@ -37,6 +37,8 @@ export type DriveInfo = {
   availableBytes: number
   isRemovable: boolean
   isReadOnly: boolean
+  isMounted: boolean
+  device: string | null
 }
 
 export type RecentFile = {
