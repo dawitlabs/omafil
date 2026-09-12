@@ -273,6 +273,17 @@ fn unwatch_directory(watcher: State<'_, DirectoryWatcher>) {
     watcher.stop();
 }
 
+/// `omafil <path>` (and `xdg-open` handing over a folder) opens straight there.
+#[tauri::command]
+fn startup_path() -> Option<String> {
+    let argument = std::env::args().nth(1)?;
+    let argument = argument.strip_prefix("file://").unwrap_or(&argument);
+    let target = resolve_navigable_path(argument).ok()?;
+    let folder = if target.is_dir() { target } else { target.parent()?.to_path_buf() };
+
+    Some(folder.to_string_lossy().into_owned())
+}
+
 #[tauri::command]
 fn read_omarchy_theme() -> Option<omarchy::ThemeColors> {
     omarchy::read_theme()
@@ -367,6 +378,7 @@ pub fn run() {
             watch_directory,
             unwatch_directory,
             read_omarchy_theme,
+            startup_path,
             load_state,
             save_state,
             list_recent_files,

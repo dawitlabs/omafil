@@ -19,6 +19,9 @@
 
   onMount(() => {
     void appState.load()
+    void invoke<string | null>('startup_path').then((path) => {
+      if (path) tabs.active.open(path)
+    })
     let reloadTimer: ReturnType<typeof setTimeout> | null = null
 
     const stopListening = listen<string>('directory-changed', (event) => {
