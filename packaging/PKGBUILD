@@ -10,6 +10,12 @@ depends=('webkit2gtk-4.1' 'gtk3' 'poppler' 'udisks2' 'xdg-utils' 'libnotify')
 makedepends=('git' 'rust' 'bun-bin')
 optdepends=('omarchy: theme and editor integration')
 provides=('omafil')
+# !debug: the release profile already sets strip = true, so makepkg's debug
+# symbols are generated and then discarded, and generating them at peak LTO
+# memory is what pushes the link over on smaller machines.
+# !lto: makepkg's global -flto breaks the C sources in zstd-sys, leaving
+# undefined ZSTD_* symbols at link time. Cargo's own lto = true still applies.
+options=('!debug' '!lto')
 conflicts=('omafil')
 source=("git+${url}.git")
 sha256sums=('SKIP')
