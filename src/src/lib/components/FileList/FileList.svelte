@@ -93,9 +93,8 @@
         },
         {
           kind: 'action',
-          label: 'Rename',
+          label: fileOperations.selectedPaths.length > 1 && fileOperations.isSelected(entry.path) ? `Rename ${fileOperations.selectedPaths.length} items…` : 'Rename',
           shortcut: 'F2',
-          disabled: fileOperations.selectedPaths.length !== 1,
           onSelect: () => fileOperations.startRenaming(entry.path),
         },
         { kind: 'action', label: 'Move to trash', shortcut: 'Del', onSelect: () => fileOperations.deleteSelection() },

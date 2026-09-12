@@ -6,6 +6,7 @@
   import OperationQueue from './lib/components/OperationQueue/OperationQueue.svelte'
   import Header from './lib/components/Header/Header.svelte'
   import FileInspector from './lib/components/FileInspector/FileInspector.svelte'
+  import BulkRename from './lib/components/BulkRename/BulkRename.svelte'
   import OpenWith from './lib/components/OpenWith/OpenWith.svelte'
   import Home from './lib/components/Home/Home.svelte'
   import Sidebar from './lib/components/Sidebar/Sidebar.svelte'
@@ -97,6 +98,9 @@
   {/if}
   {#if fileOperations.openWithPath}
     <OpenWith path={fileOperations.openWithPath} onclose={() => fileOperations.hideOpenWith()} />
+  {/if}
+  {#if fileOperations.bulkRenamePaths}
+    <BulkRename paths={fileOperations.bulkRenamePaths} onclose={() => fileOperations.hideBulkRename()} />
   {/if}
 
   <OperationQueue />

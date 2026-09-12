@@ -1,0 +1,16 @@
+.bulk-rename__fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; padding: 16px; }
+.bulk-rename__field { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); }
+.bulk-rename__field--wide { grid-column: 1 / span 2; }
+.bulk-rename__field--small { max-width: 120px; }
+.bulk-rename__field input { height: 30px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-primary); background: var(--surface-input); font: inherit; font-size: 13px; }
+.bulk-rename__field input:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.bulk-rename__hint { color: var(--text-muted); font-size: 11px; }
+
+.bulk-rename__preview { width: 100%; max-height: 260px; border-collapse: collapse; font-size: 12px; }
+.bulk-rename__preview th { padding: 6px 16px; border-top: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); color: var(--text-muted); font-weight: 500; text-align: left; }
+.bulk-rename__preview td { max-width: 0; padding: 5px 16px; overflow: hidden; color: var(--text-primary); text-overflow: ellipsis; white-space: nowrap; }
+.bulk-rename__preview tbody { display: block; max-height: 240px; overflow-y: auto; }
+.bulk-rename__preview thead, .bulk-rename__preview tbody tr { display: table; width: 100%; table-layout: fixed; }
+.bulk-rename__row--same td:last-child { color: var(--text-muted); }
+.bulk-rename__row--issue td:last-child { color: var(--text-danger); }
+.bulk-rename__issue { margin-left: 8px; font-size: 11px; }

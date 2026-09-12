@@ -14,7 +14,7 @@
   <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => fileOperations.copySelection()}>Copy</button>
   <button class="file-commands__button" type="button" disabled={!fileOperations.canPaste} onclick={() => fileOperations.paste()}>Paste</button>
   <span class="file-commands__divider" aria-hidden="true"></span>
-  <button class="file-commands__button" type="button" disabled={!hasSingleSelection} onclick={() => fileOperations.startRenaming()}>Rename</button>
+  <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => fileOperations.startRenaming()}>Rename</button>
   <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => fileOperations.deleteSelection()}>Delete</button>
   <button class="file-commands__button" type="button" disabled={fileOperations.selectedPaths.length < 2} onclick={() => fileOperations.compressSelection()}>Compress</button>
   <button class="file-commands__button" type="button" disabled={!hasSingleSelection} onclick={() => fileOperations.extractSelection()}>Extract</button>

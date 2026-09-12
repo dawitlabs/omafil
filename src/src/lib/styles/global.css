@@ -1,11 +1,13 @@
 @import "./variables.css";
 @import "./app-shell.css";
 @import "./reset.css";
+@import "./dialog.css";
 @import "../components/ContextMenu/context-menu.css";
 @import "../components/FileList/file-list.css";
 @import "../components/FileInspector/file-inspector.css";
 @import "../components/Header/header.css";
 @import "../components/Home/home.css";
 @import "../components/OpenWith/open-with.css";
+@import "../components/BulkRename/bulk-rename.css";
 @import "../components/Settings/settings.css";
 @import "../components/Sidebar/sidebar.css";

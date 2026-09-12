@@ -50,9 +50,9 @@
   }
 </script>
 
-<div class="open-with__backdrop" role="presentation" onclick={(event) => event.target === event.currentTarget && onclose()} onkeydown={handleKeydown}>
-  <dialog open class="open-with" aria-labelledby="open-with-title">
-    <header class="open-with__header">
+<div class="dialog-backdrop" role="presentation" onclick={(event) => event.target === event.currentTarget && onclose()} onkeydown={handleKeydown}>
+  <dialog open class="dialog dialog--narrow" aria-labelledby="open-with-title">
+    <header class="dialog__header">
       <h2 id="open-with-title">Open with</h2>
       <button type="button" aria-label="Close" onclick={onclose}>
         <span class="masked-icon" style="--icon: url({DismissIcon})" aria-hidden="true"></span>
@@ -79,6 +79,6 @@
       </ul>
     {/if}
 
-    <footer class="open-with__footer"><button type="button" onclick={onclose}>Cancel</button></footer>
+    <footer class="dialog__footer"><button type="button" onclick={onclose}>Cancel</button></footer>
   </dialog>
 </div>

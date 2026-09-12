@@ -46,6 +46,7 @@ class FileOperations {
   renameDraft = $state('')
   propertiesPath = $state<string | null>(null)
   openWithPath = $state<string | null>(null)
+  bulkRenamePaths = $state<string[] | null>(null)
   viewMode = $state<FileViewMode>('details')
   pendingTransfer = $state<PendingTransfer | null>(null)
   pendingPermanentDelete = $state<string[] | null>(null)
@@ -146,8 +147,33 @@ class FileOperations {
     this.clipboardMode = 'cut'
   }
 
+  showBulkRename(paths: string[] = this.selectedPaths) {
+    if (paths.length > 1) this.bulkRenamePaths = paths
+  }
+
+  hideBulkRename() {
+    this.bulkRenamePaths = null
+  }
+
+  async applyBulkRename(items: Array<{ path: string; to: string }>) {
+    await this.#run(async () => {
+      const results = await Promise.allSettled(
+        items.map(async ({ path, to }) => appState.relocate(path, await invoke<string>('rename_path', { path, name: to }))),
+      )
+      const failed = results.filter((result) => result.status === 'rejected').length
+
+      this.bulkRenamePaths = null
+      this.clearSelection()
+      if (failed > 0) throw new Error(`${failed} of ${items.length} items could not be renamed. The rest were.`)
+    }, 'Unable to rename those items.')
+  }
+
   startRenaming(path: string = this.selectedPaths[0]) {
     if (!path) return
+    if (this.selectedPaths.length > 1 && this.isSelected(path)) {
+      this.showBulkRename()
+      return
+    }
 
     this.renameDraft = this.entries.find((entry) => entry.path === path)?.name ?? ''
     this.renamingPath = path
