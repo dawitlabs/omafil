@@ -151,6 +151,8 @@
   height: 20px;
 }
 
+.file-row__icon--themed { object-fit: contain; }
+
 .file-row__modified,
 .file-row__kind,
 .file-row__size,

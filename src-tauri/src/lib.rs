@@ -2,6 +2,7 @@ mod drives;
 mod archive;
 mod diagnostics;
 mod error;
+mod icon_theme;
 mod inspect;
 mod launch;
 mod listing;
@@ -298,6 +299,11 @@ fn unwatch_directory(watcher: State<'_, DirectoryWatcher>) {
 
 /// `omafil <path>` (and `xdg-open` handing over a folder) opens straight there.
 #[tauri::command]
+fn theme_icons() -> Option<std::collections::HashMap<String, String>> {
+    icon_theme::theme_icons()
+}
+
+#[tauri::command]
 fn startup_path() -> Option<String> {
     let argument = std::env::args().nth(1)?;
     let argument = argument.strip_prefix("file://").unwrap_or(&argument);
@@ -406,6 +412,7 @@ pub fn run() {
             unwatch_directory,
             read_omarchy_theme,
             startup_path,
+            theme_icons,
             load_state,
             save_state,
             list_recent_files,

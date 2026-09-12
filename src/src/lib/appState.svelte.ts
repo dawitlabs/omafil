@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { convertFileSrc, invoke } from '@tauri-apps/api/core'
 
 export type PinnedLocation = {
   path: string
@@ -66,6 +66,7 @@ class AppState {
   isLoaded = $state(false)
   error = $state<string | null>(null)
   omarchyColors = $state<OmarchyColors | null>(null)
+  themeIcons = $state<Record<string, string> | null>(null)
 
   #appliedOmarchyVariables: string[] = []
   #saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -106,17 +107,30 @@ class AppState {
   }
 
   async refreshOmarchyTheme() {
-    this.omarchyColors = await invoke<OmarchyColors | null>('read_omarchy_theme')
+    ;[this.omarchyColors, this.themeIcons] = await Promise.all([
+      invoke<OmarchyColors | null>('read_omarchy_theme'),
+      invoke<Record<string, string> | null>('theme_icons'),
+    ])
     this.applyTheme()
   }
 
+  /** Path of the Omarchy icon theme's icon for a freedesktop name, when that theme is in use. */
+  themeIconFor(name: string): string | null {
+    if (this.settings.theme !== 'system' || !this.omarchyColors) return null
+    const path = this.themeIcons?.[name]
+
+    return path ? convertFileSrc(path) : null
+  }
+
   async load() {
-    const [stored, omarchyColors] = await Promise.all([
+    const [stored, omarchyColors, themeIcons] = await Promise.all([
       invoke<StoredState>('load_state'),
       invoke<OmarchyColors | null>('read_omarchy_theme'),
+      invoke<Record<string, string> | null>('theme_icons'),
     ])
 
     this.omarchyColors = omarchyColors
+    this.themeIcons = themeIcons
     const isFirstRun = stored.tags.length === 0 && stored.pins.length === 0 && Object.keys(stored.tagged).length === 0
 
     this.pins = stored.pins

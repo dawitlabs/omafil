@@ -2,7 +2,7 @@
   import { tick } from 'svelte'
   import { appState } from '../../appState.svelte'
   import { convertFileSrc, invoke } from '@tauri-apps/api/core'
-  import { fileIcon, folderIcon } from '../../fileIcons'
+  import { fileIcon, folderIcon, folderThemeName } from '../../fileIcons'
   import { fileOperations } from '../../fileOperations.svelte'
   import { formatBytes, formatModified, parentFolder, typeLabel } from '../../format'
   import type { DirectoryEntry } from '../../navigation.svelte'
@@ -35,6 +35,7 @@
 
   const isDirectory = $derived(entry.entryType === 'directory')
   const icon = $derived(isDirectory ? folderIcon : fileIcon(entry.name))
+  const themedIcon = $derived(appState.themeIconFor(isDirectory ? folderThemeName(entry.name) : icon.themeName))
   const isRenaming = $derived(fileOperations.renamingPath === entry.path)
   const imageFile = $derived(/\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(entry.name))
   let pdfThumbnail = $state<string | null>(null)
@@ -85,6 +86,8 @@
 >
   {#if previewMode && thumbnailSource}
     <img class="file-row__thumbnail" src={thumbnailSource} alt="" loading="lazy" decoding="async" />
+  {:else if themedIcon}
+    <img class="file-row__icon file-row__icon--themed" src={themedIcon} alt="" decoding="async" />
   {:else}
     <span class="masked-icon file-row__icon" style="--icon: url({icon.icon}); color: {icon.tone}" aria-hidden="true"></span>
   {/if}

@@ -4,7 +4,8 @@
   import DismissIcon from '@fluentui/svg-icons/icons/dismiss_20_regular.svg?no-inline'
   import FolderIcon from '@fluentui/svg-icons/icons/folder_48_regular.svg?no-inline'
   import { readableError } from '../../errors'
-  import { fileIcon } from '../../fileIcons'
+  import { appState } from '../../appState.svelte'
+  import { fileIcon, folderThemeName } from '../../fileIcons'
   import { formatBytes, formatModified, typeLabel } from '../../format'
 
   type PathInspection = {
@@ -69,7 +70,8 @@
   }
 
   const isFolder = $derived(inspection?.entryType === 'folder')
-  const icon = $derived(inspection ? (isFolder ? { icon: FolderIcon, tone: 'var(--folder-body-bottom)' } : fileIcon(inspection.name)) : null)
+  const icon = $derived(inspection ? (isFolder ? { icon: FolderIcon, tone: 'var(--folder-body-bottom)', themeName: 'folder' } : fileIcon(inspection.name)) : null)
+  const themedIcon = $derived(inspection && icon ? appState.themeIconFor(isFolder ? folderThemeName(inspection.name) : icon.themeName) : null)
   const mediaSource = $derived(inspection?.mediaType ? convertFileSrc(inspection.path) : null)
   let pdfPreview = $state<string | null>(null)
 
@@ -119,7 +121,7 @@
     <p class="file-inspector__state">{error}</p>
   {:else if inspection && icon}
     <div class="file-inspector__identity" class:file-inspector__identity--dialog={mode === 'properties'}>
-      <span class="masked-icon file-inspector__icon" style="--icon: url({icon.icon}); color: {icon.tone}" aria-hidden="true"></span>
+      {#if themedIcon}<img class="file-inspector__icon file-inspector__icon--themed" src={themedIcon} alt="" />{:else}<span class="masked-icon file-inspector__icon" style="--icon: url({icon.icon}); color: {icon.tone}" aria-hidden="true"></span>{/if}
       <strong title={inspection.name}>{inspection.name}</strong>
       <span>{typeLabel(inspection.name, isFolder)}</span>
     </div>

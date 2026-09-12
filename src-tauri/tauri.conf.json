@@ -32,7 +32,7 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$HOME/**", "/media/**", "/mnt/**", "/run/media/**", "/run/user/**"]
+        "scope": ["$HOME/**", "/media/**", "/mnt/**", "/run/media/**", "/run/user/**", "/usr/share/icons/**", "/usr/local/share/icons/**"]
       }
     }
   },
