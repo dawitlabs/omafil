@@ -14,6 +14,7 @@
 }
 
 .file-inspector--dialog {
+  position: static;
   width: min(720px, 100%);
   min-height: 500px;
   margin: 0;
@@ -92,3 +93,8 @@
 .file-inspector__text-preview { max-height: 280px; padding: 10px; margin: 0 18px 14px; overflow: auto; border: 1px solid var(--border-subtle); border-radius: 4px; color: var(--text-secondary); background: var(--surface-input); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-word; }
 .file-inspector__media-preview { display: block; width: calc(100% - 36px); max-height: 300px; margin: 0 18px 18px; border: 1px solid var(--border-subtle); border-radius: 4px; background: var(--surface-input); object-fit: contain; }
 .file-inspector__state { padding: 0 18px 18px; margin: 0; }
+.file-inspector__permissions { width: calc(100% - 36px); margin: 0 18px 14px; border-collapse: collapse; font-size: 12px; }
+.file-inspector__permissions th { padding: 0 0 8px; color: var(--text-muted); font-weight: 500; text-align: left; }
+.file-inspector__permissions td { padding: 4px 0; }
+.file-inspector__permissions input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.file-inspector__state--error { color: var(--text-danger); }

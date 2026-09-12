@@ -27,6 +27,11 @@
         open_path: () => null, new_directory: () => `${HOME}/x`, trash_paths: () => null, transfer_paths: () => null,
         list_drives: () => [{ name: 'dave', mountPoint: '/', path: HOME, totalBytes: 500 * GB, availableBytes: 330 * GB, isRemovable: false, isReadOnly: false }],
         list_recent_files: () => [],
+        inspect_path: (a) => { const p = a.path.slice(0, a.path.lastIndexOf('/')), n = a.path.slice(p.length + 1); const r = (raw[p] ?? []).find((x) => x[0] === n) ?? [n, 'd', 0, now]
+          return { name: n, path: a.path, entryType: r[1] === 'd' ? 'folder' : 'file', size: r[2], itemCount: 1, modified: r[3], created: r[3], preview: n.endsWith('.txt') ? 'hello' : null, previewTruncated: false, mediaPreview: null, mediaType: null, mode: 0o644, owner: 'dave', group: 'dave' } },
+        set_permissions: () => null,
+        list_openers: () => [{ id: 'nvim.desktop', name: 'Neovim', isDefault: true }, { id: 'code.desktop', name: 'Visual Studio Code', isDefault: false }, { id: 'gimp.desktop', name: 'GIMP', isDefault: false }],
+        open_with: () => null,
         read_omarchy_theme: () => (params.get('omarchy') ? { mode: 'dark', accent: '#f38d70', selection: '#403e41', muted: '#72696a', background: '#2c2525',
           dark_background: '#211c1c', darker_background: '#1a1616', lighter_background: '#3d2f2a', foreground: '#e6d9db', dark_foreground: '#72696a',
           light_foreground: '#c3b7b8', red: '#fd6883', yellow: '#f9cc6c', blue: '#85dacc', green: '#adda78' } : null),
@@ -41,6 +46,7 @@
       const acts = {
         nav: (n) => [...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith(n))?.click(),
         key: (k) => document.querySelector('.file-list')?.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true })),
+        ctx: (n) => row(n)?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 420, clientY: 240 })),
         click: (n) => row(n)?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 })),
         rename: (spec) => { const [from, to] = spec.split('>')
           row(from)?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }))

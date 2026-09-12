@@ -5,6 +5,7 @@ mod inspect;
 mod launch;
 mod listing;
 mod omarchy;
+mod openers;
 mod operations;
 mod operation_queue;
 mod operation_io;
@@ -22,7 +23,7 @@ use crate::listing::{
     describe_path as read_path_description, read_directory_listing, DirectoryEntry,
     DirectoryListing, EntrySort,
 };
-use crate::inspect::{inspect_path as read_path_inspection, PathInspection};
+use crate::inspect::{inspect_path as read_path_inspection, set_permissions as write_permissions, PathInspection};
 use crate::operations::{create_directory, delete_entries, find_transfer_conflicts, permanently_delete_entries, rename_entry, transfer_entries, TransferConflict, TransferConflictPolicy, TransferResult};
 use crate::operation_queue::{OperationQueue, QueuedOperation};
 use crate::paths::{known_directory_path, resolve_navigable_path};
@@ -77,6 +78,20 @@ async fn open_terminal(path: String) -> Result<(), DirectoryError> {
 #[tauri::command]
 async fn open_in_editor(path: String) -> Result<(), DirectoryError> {
     tauri::async_runtime::spawn_blocking(move || launch::open_editor(&path))
+        .await
+        .map_err(|_| DirectoryError::open_failed())?
+}
+
+#[tauri::command]
+async fn list_openers(path: String) -> Result<Vec<openers::Opener>, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || openers::list_openers(path))
+        .await
+        .map_err(|_| DirectoryError::open_failed())?
+}
+
+#[tauri::command]
+async fn open_with(path: String, desktop_id: String) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || openers::open_with(path, desktop_id))
         .await
         .map_err(|_| DirectoryError::open_failed())?
 }
@@ -185,6 +200,13 @@ async fn transfer_conflicts(paths: Vec<String>, destination_path: String) -> Res
 }
 
 #[tauri::command]
+async fn set_permissions(path: String, mode: u32) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || write_permissions(path, mode))
+        .await
+        .map_err(|_| DirectoryError::operation_failed())?
+}
+
+#[tauri::command]
 async fn inspect_path(path: String) -> Result<PathInspection, DirectoryError> {
     tauri::async_runtime::spawn_blocking(move || read_path_inspection(path))
         .await
@@ -286,6 +308,8 @@ pub fn run() {
             open_path,
             open_terminal,
             open_in_editor,
+            list_openers,
+            open_with,
             new_directory,
             rename_path,
             trash_paths,
@@ -302,6 +326,7 @@ pub fn run() {
             empty_recycle_bin,
             transfer_conflicts,
             inspect_path,
+            set_permissions,
             describe_path,
             search_files,
             watch_directory,

@@ -1,6 +1,6 @@
 use crate::{error::DirectoryError, paths::resolve_navigable_path};
 use serde::Serialize;
-use std::{fs, path::Path, time::UNIX_EPOCH};
+use std::{fs, os::unix::fs::{MetadataExt, PermissionsExt}, path::Path, time::UNIX_EPOCH};
 
 const MAX_TEXT_PREVIEW_BYTES: u64 = 48 * 1024;
 
@@ -18,6 +18,34 @@ pub(crate) struct PathInspection {
     pub(crate) preview_truncated: bool,
     pub(crate) media_preview: Option<String>,
     pub(crate) media_type: Option<String>,
+    pub(crate) mode: u32,
+    pub(crate) owner: String,
+    pub(crate) group: String,
+}
+
+/// passwd and group files share the `name:x:id:` layout, so one lookup serves both.
+fn name_for_id(table: &str, id: u32) -> Option<String> {
+    table.lines().find_map(|line| {
+        let mut fields = line.split(':');
+        let name = fields.next()?;
+        let matches = fields.nth(1)?.parse::<u32>().ok()? == id;
+
+        matches.then(|| name.to_owned())
+    })
+}
+
+fn account_name(file: &str, id: u32) -> String {
+    fs::read_to_string(file)
+        .ok()
+        .and_then(|table| name_for_id(&table, id))
+        .unwrap_or_else(|| id.to_string())
+}
+
+pub(crate) fn set_permissions(path: String, mode: u32) -> Result<(), DirectoryError> {
+    let target = resolve_navigable_path(&path)?;
+
+    fs::set_permissions(&target, fs::Permissions::from_mode(mode & 0o777))
+        .map_err(|_| DirectoryError::detail("Only the owner can change these permissions."))
 }
 
 fn media_type(path: &Path) -> Option<&'static str> {
@@ -111,5 +139,21 @@ pub(crate) fn inspect_path(path: String) -> Result<PathInspection, DirectoryErro
         preview_truncated,
         media_preview: None,
         media_type,
+        mode: metadata.mode() & 0o777,
+        owner: account_name("/etc/passwd", metadata.uid()),
+        group: account_name("/etc/group", metadata.gid()),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::name_for_id;
+
+    #[test]
+    fn resolves_names_from_passwd_style_tables() {
+        let table = "root:x:0:0:root:/root:/bin/bash\ndave:x:1000:1000::/home/dave:/bin/fish\nbroken line\n";
+
+        assert_eq!(name_for_id(table, 1000).as_deref(), Some("dave"));
+        assert_eq!(name_for_id(table, 7), None);
+    }
 }

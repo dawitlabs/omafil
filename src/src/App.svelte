@@ -6,6 +6,7 @@
   import OperationQueue from './lib/components/OperationQueue/OperationQueue.svelte'
   import Header from './lib/components/Header/Header.svelte'
   import FileInspector from './lib/components/FileInspector/FileInspector.svelte'
+  import OpenWith from './lib/components/OpenWith/OpenWith.svelte'
   import Home from './lib/components/Home/Home.svelte'
   import Sidebar from './lib/components/Sidebar/Sidebar.svelte'
   import { appState } from './lib/appState.svelte'
@@ -87,6 +88,9 @@
 
   {#if fileOperations.propertiesPath}
     <FileInspector path={fileOperations.propertiesPath} mode="properties" onclose={() => fileOperations.hideProperties()} />
+  {/if}
+  {#if fileOperations.openWithPath}
+    <OpenWith path={fileOperations.openWithPath} onclose={() => fileOperations.hideOpenWith()} />
   {/if}
 
   <OperationQueue />

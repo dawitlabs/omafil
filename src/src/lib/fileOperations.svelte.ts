@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { readableError } from './errors'
 import { appState } from './appState.svelte'
 import { tabs } from './tabs.svelte'
 import type { DirectoryEntry } from './navigation.svelte'
@@ -23,14 +24,6 @@ type PendingTransfer = {
   conflicts: TransferConflict[]
 }
 
-function readableError(error: unknown, fallback: string): string {
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
-    return error.message
-  }
-
-  return fallback
-}
-
 function untakenFolderName(existingNames: string[]): string {
   const base = 'New folder'
 
@@ -52,6 +45,7 @@ class FileOperations {
   renamingPath = $state<string | null>(null)
   renameDraft = $state('')
   propertiesPath = $state<string | null>(null)
+  openWithPath = $state<string | null>(null)
   viewMode = $state<FileViewMode>('details')
   pendingTransfer = $state<PendingTransfer | null>(null)
   pendingPermanentDelete = $state<string[] | null>(null)
@@ -161,6 +155,14 @@ class FileOperations {
 
   cancelRenaming() {
     this.renamingPath = null
+  }
+
+  showOpenWith(path: string = this.selectedPaths[0]) {
+    if (path) this.openWithPath = path
+  }
+
+  hideOpenWith() {
+    this.openWithPath = null
   }
 
   showProperties(path: string = this.selectedPaths[0]) {

@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { readableError } from './errors'
 import { appState } from './appState.svelte'
 
 export type DirectoryEntry = {
@@ -61,14 +62,6 @@ export type View =
   | { kind: 'search'; path: string; query: string }
   | { kind: 'tag'; id: string; label: string }
   | { kind: 'placeholder'; label: string }
-
-function readableError(error: unknown, fallback: string): string {
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
-    return error.message
-  }
-
-  return fallback
-}
 
 function basename(path: string): string {
   return path.split('/').filter(Boolean).at(-1) ?? path

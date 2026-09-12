@@ -9,7 +9,7 @@ use std::{
 
 /// Runs the first candidate that exists on PATH. A child that fails after
 /// starting reports through its own UI, so only a missing program moves on.
-fn spawn_first(candidates: &[Vec<String>], cwd: &Path, failure: &str) -> Result<(), DirectoryError> {
+pub(crate) fn spawn_first(candidates: &[Vec<String>], cwd: &Path, failure: &str) -> Result<(), DirectoryError> {
     for argv in candidates {
         let Some((program, args)) = argv.split_first() else { continue };
         let spawned = Command::new(program)

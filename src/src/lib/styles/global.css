@@ -6,5 +6,6 @@
 @import "../components/FileInspector/file-inspector.css";
 @import "../components/Header/header.css";
 @import "../components/Home/home.css";
+@import "../components/OpenWith/open-with.css";
 @import "../components/Settings/settings.css";
 @import "../components/Sidebar/sidebar.css";

@@ -75,7 +75,7 @@
       y: event.clientY,
       items: [
         { kind: 'action', label: 'Open', onSelect: () => tabs.active.openEntry(entry) },
-        ...(entry.entryType === 'file' ? [{ kind: 'action', label: 'Edit', onSelect: () => tabs.active.openInEditor(entry.path) } as ContextMenuItem] : []),
+        ...(entry.entryType === 'file' ? [{ kind: 'action', label: 'Edit', onSelect: () => tabs.active.openInEditor(entry.path) } as ContextMenuItem, { kind: 'action', label: 'Open with…', onSelect: () => fileOperations.showOpenWith(entry.path) } as ContextMenuItem] : []),
         { kind: 'action', label: entry.entryType === 'directory' ? 'Open in terminal' : 'Open folder in terminal', shortcut: 'F4', onSelect: () => tabs.active.openTerminal(entry.path) },
         { kind: 'separator' },
         { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: () => fileOperations.cutSelection() },
