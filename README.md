@@ -38,11 +38,33 @@ Tests: `cargo test` in `src-tauri`, `bun test` and `bun run check` in `src`.
 
 ## Install
 
+Omarchy and other Arch systems, once the package is on the AUR:
+
 ```sh
-make install
+omarchy pkg aur add omafil-git   # or: yay -S omafil-git
 ```
 
-Builds the release binary, installs it to `~/.local/bin` with the desktop entry and icons, and makes omafil the `inode/directory` handler. Then point the Hyprland file-manager keys at it in `~/.config/hypr/bindings.lua`:
+Until then, build the package from this repo. It installs the binary, the
+desktop entry and the icons system-wide, so omafil appears in the launcher:
+
+```sh
+git clone https://github.com/dawitlabs/omafil
+makepkg -si -p omafil/packaging/PKGBUILD
+```
+
+Or install into your home directory without a package:
+
+```sh
+make install    # ~/.local/bin, plus the desktop entry and icons
+make uninstall  # removes them again
+```
+
+Either way, make omafil the folder handler and point the Hyprland
+file-manager keys at it in `~/.config/hypr/bindings.lua`:
+
+```sh
+xdg-mime default omafil.desktop inode/directory
+```
 
 ```lua
 hl.unbind("SUPER + SHIFT + F")
@@ -51,6 +73,8 @@ o.bind("SUPER + SHIFT + F", "File manager", { launch = "omafil" })
 o.bind("SUPER + ALT + SHIFT + F", "File manager (cwd)", { launch = "sh -c 'omafil \"$(omarchy-cmd-terminal-cwd)\"'" })
 ```
 
-`make uninstall` removes it again. Arch users can build `packaging/PKGBUILD` with `makepkg -si`.
+There is no graphical installer. A tagged `v*` release also carries an
+AppImage, which runs standalone but registers no desktop entry or file
+associations, so it never becomes the system file manager.
 
-CI runs the tests on every push and attaches an AppImage and a .deb to tagged `v*` releases.
+CI runs the tests on every push and attaches the AppImage to tagged releases.

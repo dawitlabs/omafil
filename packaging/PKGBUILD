@@ -1,4 +1,4 @@
-# Maintainer: Dawit Worku
+# Maintainer: Dawit Worku <dawitworkujima@gmail.com>
 pkgname=omafil-git
 pkgver=0.1.0
 pkgrel=1
@@ -7,7 +7,8 @@ arch=('x86_64')
 url="https://github.com/dawitlabs/omafil"
 license=('MIT')
 depends=('webkit2gtk-4.1' 'gtk3' 'poppler' 'udisks2' 'xdg-utils' 'libnotify')
-makedepends=('git' 'rust' 'cargo' 'bun' 'cargo-tauri')
+makedepends=('git' 'rust' 'bun-bin')
+optdepends=('omarchy: theme and editor integration')
 provides=('omafil')
 conflicts=('omafil')
 source=("git+${url}.git")
@@ -15,14 +16,26 @@ sha256sums=('SKIP')
 
 pkgver() {
   cd "${srcdir}/omafil"
-  printf '%s.r%s.%s' "$(grep -m1 '"version"' src-tauri/tauri.conf.json | sed 's/[^0-9.]//g')" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+  printf '%s.r%s.%s' \
+    "$(sed -n 's/.*"version": "\([^"]*\)".*/\1/p' src-tauri/tauri.conf.json | head -1)" \
+    "$(git rev-list --count HEAD)" \
+    "$(git rev-parse --short HEAD)"
 }
 
 build() {
   cd "${srcdir}/omafil/src"
   bun install --frozen-lockfile
-  cd ../src-tauri
-  cargo tauri build --no-bundle
+  bun run build
+
+  # tauri.conf.json's beforeBuildCommand only runs under the tauri CLI, so the
+  # frontend is built above and this is a plain cargo release build.
+  cd "${srcdir}/omafil/src-tauri"
+  cargo build --release --locked
+}
+
+check() {
+  cd "${srcdir}/omafil/src-tauri"
+  cargo test --release --locked
 }
 
 package() {
@@ -31,5 +44,6 @@ package() {
   install -Dm644 packaging/omafil.desktop "${pkgdir}/usr/share/applications/omafil.desktop"
   install -Dm644 src-tauri/icons/128x128.png "${pkgdir}/usr/share/icons/hicolor/128x128/apps/omafil.png"
   install -Dm644 src-tauri/icons/32x32.png "${pkgdir}/usr/share/icons/hicolor/32x32/apps/omafil.png"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
   install -Dm644 README.md "${pkgdir}/usr/share/doc/omafil/README.md"
 }

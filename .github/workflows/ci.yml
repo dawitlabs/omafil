@@ -57,9 +57,8 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Bundle
         working-directory: src-tauri
-        run: cargo tauri build --bundles appimage,deb
+        run: cargo tauri build --bundles appimage
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             src-tauri/target/release/bundle/appimage/*.AppImage
-            src-tauri/target/release/bundle/deb/*.deb
