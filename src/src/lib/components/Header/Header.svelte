@@ -14,6 +14,7 @@
   import MaximizeIcon from '@fluentui/svg-icons/icons/square_20_regular.svg?no-inline'
   import { getCurrentWindow } from '@tauri-apps/api/window'
   import { tabs } from '../../tabs.svelte'
+  import { appState } from '../../appState.svelte'
   import { fileOperations } from '../../fileOperations.svelte'
 
   const SEARCH_DELAY_MS = 300
@@ -50,6 +51,13 @@
     if (event.key === 'F5') {
       event.preventDefault()
       active.reload()
+      return
+    }
+
+    if (event.key === '/' && appState.settings.vimKeys) {
+      event.preventDefault()
+      searchInput?.focus()
+      searchInput?.select()
       return
     }
 

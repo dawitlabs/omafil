@@ -82,6 +82,20 @@
     </div>
 
     <div class="settings__row">
+      <label class="settings__label" for="setting-vim">
+        <span>Vim keys</span>
+        <span class="settings__hint">j and k move, h goes up, l opens, gg and G jump, / searches. Replaces type-to-select.</span>
+      </label>
+      <input
+        id="setting-vim"
+        class="settings__switch"
+        type="checkbox"
+        checked={appState.settings.vimKeys}
+        onchange={(event) => appState.update({ vimKeys: event.currentTarget.checked })}
+      />
+    </div>
+
+    <div class="settings__row">
       <label class="settings__label" for="setting-sort">
         <span>Default sort</span>
         <span class="settings__hint">Applies to folders you have not sorted yourself.</span>

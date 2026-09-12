@@ -33,6 +33,7 @@ pub(crate) struct Settings {
     pub(crate) theme: String,
     pub(crate) default_sort: String,
     pub(crate) default_descending: bool,
+    pub(crate) vim_keys: bool,
 }
 
 impl Default for Settings {
@@ -42,6 +43,7 @@ impl Default for Settings {
             theme: "system".to_owned(),
             default_sort: "name".to_owned(),
             default_descending: false,
+            vim_keys: false,
         }
     }
 }

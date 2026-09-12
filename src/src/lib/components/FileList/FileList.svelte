@@ -203,6 +203,8 @@
     if (match) moveSelection(entries.indexOf(match))
   }
 
+  let isAwaitingG = false
+
   function handleKeydown(event: KeyboardEvent) {
     if (fileOperations.renamingPath) return
 
@@ -241,6 +243,24 @@
       End: entries.length - 1,
     }
 
+    if (appState.settings.vimKeys && !event.altKey) {
+      const isSecondG = event.key === 'g' && isAwaitingG
+      isAwaitingG = event.key === 'g' && !isSecondG
+      Object.assign(moves, { j: activeIndex + 1, k: activeIndex - 1, G: entries.length - 1, ...(isSecondG ? { g: 0 } : {}) })
+
+      if (event.key === 'h') {
+        event.preventDefault()
+        tabs.active.up()
+        return
+      }
+      if (event.key === 'l' && entry) {
+        event.preventDefault()
+        void tabs.active.openEntry(entry)
+        return
+      }
+      if (event.key === 'g' || event.key === '/') return
+    }
+
     if (event.key in moves) {
       event.preventDefault()
       moveSelection(moves[event.key])
@@ -262,7 +282,7 @@
     else if (event.shiftKey && event.key === 'Delete') fileOperations.requestPermanentDelete()
     else if (event.key === 'Delete') void fileOperations.deleteSelection()
     else if (event.key === 'Escape') fileOperations.clearSelection()
-    else if (event.key.length === 1 && !event.altKey) {
+    else if (event.key.length === 1 && !event.altKey && !appState.settings.vimKeys) {
       event.preventDefault()
       selectByTyping(event.key)
     }

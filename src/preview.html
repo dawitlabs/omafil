@@ -8,7 +8,7 @@
       const params = new URLSearchParams(location.search)
       let stored = { pins: [], tags: [{ id: 'design', label: 'Design', color: '#f5342e' }, { id: 'dev', label: 'Dev', color: '#ffc72c' }],
         tagged: { [`${HOME}/Documents/budget.xlsx`]: ['design'], [`${HOME}/Documents/read.pdf`]: ['dev'], '/home/dave/Gone/missing.txt': ['design'] },
-        settings: { showHidden: false, theme: params.get('theme') ?? 'light', defaultSort: 'name', defaultDescending: false } }
+        settings: { showHidden: false, theme: params.get('theme') ?? 'light', defaultSort: 'name', defaultDescending: false, vimKeys: Boolean(params.get('vim')) } }
       const mk = (p, [name, kind, size, modified]) => ({ name, path: `${p}/${name}`, entryType: kind === 'd' ? 'directory' : 'file', size, modified })
       const listeners = {}
       const mock = {
@@ -40,6 +40,7 @@
       const row = (n) => [...document.querySelectorAll('[data-path]')].find((r) => r.textContent.trim().startsWith(n))
       const acts = {
         nav: (n) => [...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith(n))?.click(),
+        key: (k) => document.querySelector('.file-list')?.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true })),
         click: (n) => row(n)?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 })),
         rename: (spec) => { const [from, to] = spec.split('>')
           row(from)?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }))
