@@ -122,3 +122,69 @@
   --folder-body-top: #e8c877;
   --folder-body-bottom: #d9ac45;
 }
+
+/* Omarchy themes provide raw colours as --om-* variables; the tokens are
+   derived here so the app retints the moment `omarchy theme set` runs. */
+:root[data-theme='omarchy'] {
+  color-scheme: light;
+
+  --surface-sidebar: var(--om-dark-background, var(--om-background));
+  --surface-tabstrip: var(--om-darker-background, var(--om-background));
+  --surface-commandbar: var(--om-background);
+  --surface-content: var(--om-background);
+  --surface-input: var(--om-lighter-background, var(--om-background));
+  --surface-menu: var(--om-lighter-background, var(--om-background));
+  --surface-card: var(--om-lighter-background, var(--om-background));
+  --surface-card-hover: var(--om-selection, var(--om-lighter-background));
+  --surface-status: var(--om-dark-background, var(--om-background));
+  --surface-hover: color-mix(in oklab, var(--om-foreground) 8%, var(--om-background));
+  --surface-nav-hover: color-mix(in oklab, var(--om-foreground) 8%, var(--surface-sidebar));
+  --surface-nav-selected: var(--om-lighter-background, var(--om-background));
+  --surface-selected: color-mix(in oklab, var(--om-accent) 22%, var(--om-background));
+  --surface-selected-hover: color-mix(in oklab, var(--om-accent) 30%, var(--om-background));
+  --surface-tab-hover: color-mix(in oklab, var(--om-foreground) 8%, transparent);
+  --overlay-hover: color-mix(in oklab, var(--om-foreground) 6%, transparent);
+  --overlay-hover-strong: color-mix(in oklab, var(--om-foreground) 10%, transparent);
+
+  --border-subtle: color-mix(in oklab, var(--om-foreground) 12%, var(--om-background));
+  --border-commandbar: var(--border-subtle);
+  --border-strong: var(--om-muted, var(--om-foreground));
+  --border-menu: color-mix(in oklab, var(--om-foreground) 16%, var(--om-background));
+  --border-status: var(--border-subtle);
+
+  --text-primary: var(--om-foreground);
+  --text-secondary: var(--om-light-foreground, var(--om-foreground));
+  --text-muted: var(--om-dark-foreground, var(--om-muted));
+  --text-disabled: var(--om-muted, var(--om-foreground));
+  --text-accent: var(--om-accent);
+  --text-on-accent: var(--om-background);
+
+  --accent: var(--om-accent);
+  --accent-soft: color-mix(in oklab, var(--om-accent) 18%, transparent);
+  --progress-track: var(--om-selection, var(--om-lighter-background));
+  --scrollbar-thumb: var(--om-muted, var(--om-foreground));
+  --shadow-menu: 0 8px 24px rgb(0 0 0 / 30%);
+
+  --surface-notice: color-mix(in oklab, var(--om-yellow) 14%, var(--om-background));
+  --border-notice: color-mix(in oklab, var(--om-yellow) 35%, var(--om-background));
+  --text-notice: var(--om-yellow);
+  --surface-danger: color-mix(in oklab, var(--om-red) 14%, var(--om-background));
+  --border-danger: color-mix(in oklab, var(--om-red) 35%, var(--om-background));
+  --text-danger: var(--om-red);
+  --danger-strong: var(--om-red);
+
+  --icon-drive: var(--om-light-foreground, var(--om-foreground));
+  --icon-drive-removable: var(--om-blue);
+
+  --tag-red: var(--om-red);
+  --tag-yellow: var(--om-yellow);
+  --tag-blue: var(--om-blue);
+
+  --folder-tab: var(--om-accent);
+  --folder-body-top: color-mix(in oklab, var(--om-accent) 78%, var(--om-foreground));
+  --folder-body-bottom: var(--om-accent);
+}
+
+:root[data-theme='omarchy'][data-mode='dark'] {
+  color-scheme: dark;
+}

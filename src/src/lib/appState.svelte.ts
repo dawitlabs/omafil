@@ -38,6 +38,12 @@ type StoredState = {
 
 const SAVE_DELAY_MS = 400
 
+type OmarchyColors = Record<string, string>
+
+function omarchyVariable(key: string): string {
+  return `--om-${key.replaceAll('_', '-')}`
+}
+
 export const tagColors = ['#f5342e', '#ffc72c', '#0a84e8', '#28a745', '#a855f7'] as const
 
 const seedTags: Tag[] = [
@@ -57,7 +63,9 @@ class AppState {
   settings = $state<Settings>({ ...defaultSettings })
   isLoaded = $state(false)
   error = $state<string | null>(null)
+  omarchyColors = $state<OmarchyColors | null>(null)
 
+  #appliedOmarchyVariables: string[] = []
   #saveTimer: ReturnType<typeof setTimeout> | null = null
   #darkMedia = window.matchMedia('(prefers-color-scheme: dark)')
 
@@ -66,18 +74,47 @@ class AppState {
     this.applyTheme()
   }
 
+  get isOmarchy(): boolean {
+    return this.omarchyColors !== null
+  }
+
   get resolvedTheme(): 'light' | 'dark' {
     if (this.settings.theme !== 'system') return this.settings.theme
+    if (this.omarchyColors) return this.omarchyColors.mode === 'light' ? 'light' : 'dark'
 
     return this.#darkMedia.matches ? 'dark' : 'light'
   }
 
   applyTheme() {
-    document.documentElement.dataset.theme = this.resolvedTheme
+    const root = document.documentElement
+    const colors = this.settings.theme === 'system' ? this.omarchyColors : null
+
+    root.dataset.theme = colors ? 'omarchy' : this.resolvedTheme
+    root.dataset.mode = this.resolvedTheme
+
+    for (const variable of this.#appliedOmarchyVariables) root.style.removeProperty(variable)
+    this.#appliedOmarchyVariables = []
+    if (!colors) return
+
+    for (const [key, value] of Object.entries(colors)) {
+      const variable = omarchyVariable(key)
+      root.style.setProperty(variable, value)
+      this.#appliedOmarchyVariables.push(variable)
+    }
+  }
+
+  async refreshOmarchyTheme() {
+    this.omarchyColors = await invoke<OmarchyColors | null>('read_omarchy_theme')
+    this.applyTheme()
   }
 
   async load() {
-    const stored = await invoke<StoredState>('load_state')
+    const [stored, omarchyColors] = await Promise.all([
+      invoke<StoredState>('load_state'),
+      invoke<OmarchyColors | null>('read_omarchy_theme'),
+    ])
+
+    this.omarchyColors = omarchyColors
     const isFirstRun = stored.tags.length === 0 && stored.pins.length === 0 && Object.keys(stored.tagged).length === 0
 
     this.pins = stored.pins

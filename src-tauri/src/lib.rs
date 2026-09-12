@@ -3,6 +3,7 @@ mod archive;
 mod error;
 mod inspect;
 mod listing;
+mod omarchy;
 mod operations;
 mod operation_queue;
 mod operation_io;
@@ -215,6 +216,11 @@ fn unwatch_directory(watcher: State<'_, DirectoryWatcher>) {
 }
 
 #[tauri::command]
+fn read_omarchy_theme() -> Option<omarchy::ThemeColors> {
+    omarchy::read_theme()
+}
+
+#[tauri::command]
 async fn load_state() -> AppState {
     tauri::async_runtime::spawn_blocking(read_state)
         .await
@@ -250,6 +256,13 @@ pub fn run() {
             app.manage(DirectoryWatcher::default());
             app.manage(SearchGeneration::default());
             app.manage(OperationQueue::default());
+
+            let handle = app.handle().clone();
+            if let Some(theme_watcher) = omarchy::watch_theme(move || {
+                let _ = handle.emit("omarchy-theme-changed", ());
+            }) {
+                app.manage(theme_watcher);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -276,6 +289,7 @@ pub fn run() {
             search_files,
             watch_directory,
             unwatch_directory,
+            read_omarchy_theme,
             load_state,
             save_state,
             list_recent_files,

@@ -35,6 +35,10 @@
       fileOperations.receiveOperationUpdate(event.payload)
     })
 
+    const stopThemeListening = listen('omarchy-theme-changed', () => {
+      void appState.refreshOmarchyTheme()
+    })
+
     const stopDropListening = getCurrentWindow().onDragDropEvent((event) => {
       if (event.payload.type === 'enter') fileOperations.externalDropPaths = event.payload.paths
       else if (event.payload.type === 'leave') fileOperations.externalDropPaths = null
@@ -48,6 +52,7 @@
     return () => {
       void stopListening.then((stop) => stop())
       void stopOperationListening.then((stop) => stop())
+      void stopThemeListening.then((stop) => stop())
       void stopDropListening.then((stop) => stop())
       if (reloadTimer) clearTimeout(reloadTimer)
       void invoke('unwatch_directory')

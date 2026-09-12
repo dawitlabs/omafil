@@ -43,7 +43,7 @@
     <div class="settings__row">
       <div class="settings__label">
         <span>Theme</span>
-        <span class="settings__hint">System follows your desktop setting.</span>
+        <span class="settings__hint">{appState.isOmarchy ? 'Omarchy follows the active Omarchy theme.' : 'System follows your desktop setting.'}</span>
       </div>
       <div class="settings__segmented" role="group" aria-label="Theme">
         {#each themes as option (option.value)}
@@ -54,7 +54,7 @@
             aria-pressed={appState.settings.theme === option.value}
             onclick={() => appState.update({ theme: option.value })}
           >
-            {option.label}
+            {option.value === 'system' && appState.isOmarchy ? 'Omarchy' : option.label}
           </button>
         {/each}
       </div>
