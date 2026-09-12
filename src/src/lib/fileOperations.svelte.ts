@@ -157,10 +157,17 @@ class FileOperations {
 
   async applyBulkRename(items: Array<{ path: string; to: string }>) {
     await this.#run(async () => {
-      const results = await Promise.allSettled(
-        items.map(async ({ path, to }) => appState.relocate(path, await invoke<string>('rename_path', { path, name: to }))),
-      )
-      const failed = results.filter((result) => result.status === 'rejected').length
+      let failed = 0
+
+      // Sequential on purpose: a plan may chain names (a→b while b→c), so
+      // order decides whether the second rename finds its target free.
+      for (const { path, to } of items) {
+        try {
+          appState.relocate(path, await invoke<string>('rename_path', { path, name: to }))
+        } catch {
+          failed += 1
+        }
+      }
 
       this.bulkRenamePaths = null
       this.clearSelection()
