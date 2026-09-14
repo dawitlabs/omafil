@@ -10,6 +10,14 @@
 <div class="file-commands" role="toolbar" aria-label="File commands">
   <button class="file-commands__button" type="button" disabled={!inFolder} onclick={() => fileOperations.createFolder()}>New folder</button>
   <span class="file-commands__divider" aria-hidden="true"></span>
+  <button
+    class="file-commands__button"
+    type="button"
+    disabled={!fileOperations.canUndo}
+    title={fileOperations.undoLabel ?? 'Nothing to undo'}
+    onclick={() => fileOperations.undo()}
+  >Undo</button>
+  <span class="file-commands__divider" aria-hidden="true"></span>
   <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => fileOperations.cutSelection()}>Cut</button>
   <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => fileOperations.copySelection()}>Copy</button>
   <button class="file-commands__button" type="button" disabled={!fileOperations.canPaste} onclick={() => fileOperations.paste()}>Paste</button>

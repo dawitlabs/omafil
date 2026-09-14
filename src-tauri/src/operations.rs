@@ -61,13 +61,20 @@ pub(crate) fn rename_entry(path: String, name: String) -> Result<String, Directo
     Ok(target.to_string_lossy().into_owned())
 }
 
-pub(crate) fn delete_entries(paths: Vec<String>) -> Result<(), DirectoryError> {
+/// Returns the trash ids of what it removed, which is what restoring them later needs.
+pub(crate) fn delete_entries(paths: Vec<String>) -> Result<Vec<String>, DirectoryError> {
     let resolved = paths
         .iter()
         .map(|path| resolve_entry_path(path))
         .collect::<Result<Vec<_>, _>>()?;
 
-    trash::delete_all(&resolved).map_err(|_| DirectoryError::operation_failed())
+    let known = crate::recycle::recycle_item_ids()?;
+    trash::delete_all(&resolved).map_err(|_| DirectoryError::operation_failed())?;
+
+    Ok(crate::recycle::recycle_item_ids()?
+        .into_iter()
+        .filter(|id| !known.contains(id))
+        .collect())
 }
 
 pub(crate) fn transfer_entries(

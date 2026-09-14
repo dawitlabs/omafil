@@ -27,6 +27,15 @@ pub(crate) fn list_recycle_bin() -> Result<Vec<RecycleItem>, DirectoryError> {
     Ok(items)
 }
 
+/// The ids currently in the trash, used to tell apart what a delete just added.
+pub(crate) fn recycle_item_ids() -> Result<std::collections::HashSet<String>, DirectoryError> {
+    Ok(list()
+        .map_err(|_| DirectoryError::unavailable())?
+        .into_iter()
+        .map(|item| item.id.to_string_lossy().into_owned())
+        .collect())
+}
+
 fn selected(ids: &[String]) -> Result<Vec<trash::TrashItem>, DirectoryError> {
     let requested = ids.iter().collect::<std::collections::HashSet<_>>();
     let items = list()

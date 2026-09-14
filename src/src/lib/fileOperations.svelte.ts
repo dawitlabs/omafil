@@ -4,6 +4,7 @@ import { appState } from './appState.svelte'
 import { tabs } from './tabs.svelte'
 import type { DirectoryEntry, PathCrumb } from './navigation.svelte'
 import { isTerminal, reconcileOperation, remainingCutPaths, type FileOperation } from './operationState'
+import { parentOf, planUndo, pushEntry, type UndoEntry } from './undo'
 export type { FileOperation, TransferResult } from './operationState'
 
 export type ClipboardMode = 'copy' | 'cut'
@@ -53,6 +54,8 @@ class FileOperations {
   archiveDraft = $state('Archive.zip')
   pendingArchivePaths = $state<string[] | null>(null)
   archiveDestination = $state('')
+  undoStack = $state<UndoEntry[]>([])
+  #isUndoing = false
   externalDropPaths = $state<string[] | null>(null)
   error = $state<string | null>(null)
   isBusy = $state(false)
@@ -172,14 +175,19 @@ class FileOperations {
 
       // Sequential on purpose: a plan may chain names (a→b while b→c), so
       // order decides whether the second rename finds its target free.
+      const renames: Array<{ from: string; to: string }> = []
+
       for (const { path, to } of items) {
         try {
-          appState.relocate(path, await invoke<string>('rename_path', { path, name: to }))
+          const renamed = await invoke<string>('rename_path', { path, name: to })
+          appState.relocate(path, renamed)
+          renames.push({ from: path, to: renamed })
         } catch {
           failed += 1
         }
       }
 
+      this.#record({ kind: 'rename', renames })
       this.bulkRenamePaths = null
       this.clearSelection()
       if (failed > 0) throw new Error(`${failed} of ${items.length} items could not be renamed. The rest were.`)
@@ -217,6 +225,57 @@ class FileOperations {
     this.propertiesPath = null
   }
 
+  get canUndo(): boolean {
+    return this.undoStack.length > 0 && !this.isBusy
+  }
+
+  get undoLabel(): string | null {
+    const entry = this.undoStack.at(-1)
+
+    return entry ? (planUndo(entry)?.label ?? null) : null
+  }
+
+  #record(entry: UndoEntry) {
+    if (this.#isUndoing) return
+    this.undoStack = pushEntry(this.undoStack, entry)
+  }
+
+  /** Reverses the last recorded operation. Undoing is never itself recorded. */
+  async undo(): Promise<void> {
+    const entry = this.undoStack.at(-1)
+    if (!entry || this.isBusy) return
+
+    this.undoStack = this.undoStack.slice(0, -1)
+    const plan = planUndo(entry)
+    if (!plan) return await this.undo()
+
+    this.#isUndoing = true
+    try {
+      if (plan.action === 'move') {
+        const byDestination = new Map<string, string[]>()
+        for (const item of plan.items) byDestination.set(item.destination, [...(byDestination.get(item.destination) ?? []), item.path])
+
+        for (const [destinationPath, paths] of byDestination) {
+          await this.#run(() => invoke('transfer_paths', { paths, destinationPath, isMove: true, conflictPolicy: 'rename' }), 'Unable to undo that move.')
+        }
+      } else if (plan.action === 'trash') {
+        await this.#run(() => invoke('trash_paths', { paths: plan.paths }), 'Unable to undo that.')
+        appState.forget(plan.paths)
+      } else if (plan.action === 'rename') {
+        for (const { path, to } of plan.renames) {
+          await this.#run(async () => appState.relocate(path, await invoke<string>('rename_path', { path, name: to })), 'Unable to undo that rename.')
+        }
+      } else {
+        await this.#run(() => invoke('restore_recycle_items', { ids: plan.ids }), 'Unable to restore those items.')
+      }
+    } finally {
+      this.#isUndoing = false
+    }
+
+    this.clearSelection()
+    tabs.reloadAll()
+  }
+
   async #run(operation: () => Promise<unknown>, fallback: string): Promise<boolean> {
     this.isBusy = true
     this.error = null
@@ -252,6 +311,7 @@ class FileOperations {
 
     await this.#run(async () => {
       created = await invoke<string>('new_directory', { parentPath, name })
+      this.#record({ kind: 'create', path: created })
 
       if (parentPath === this.directoryPath) {
         this.selectOnly(created)
@@ -285,6 +345,7 @@ class FileOperations {
     await this.#run(async () => {
       renamed = await invoke<string>('rename_path', { path, name })
       appState.relocate(path, renamed)
+      this.#record({ kind: 'rename', renames: [{ from: path, to: renamed }] })
     }, 'Unable to rename that item.')
 
     return renamed
@@ -297,9 +358,13 @@ class FileOperations {
   async deletePaths(paths: string[]) {
     if (paths.length === 0) return
 
-    const deleted = await this.#run(() => invoke('trash_paths', { paths }), 'Unable to move those items to the trash.')
+    let ids: string[] = []
+    const deleted = await this.#run(async () => {
+      ids = await invoke<string[]>('trash_paths', { paths })
+    }, 'Unable to move those items to the trash.')
 
     if (deleted) {
+      this.#record({ kind: 'trash', ids, count: paths.length })
       appState.forget(paths)
       this.clearSelection()
     }
@@ -342,6 +407,9 @@ class FileOperations {
     this.operations = reconcileOperation(this.operations, update)
 
     if (isTerminal(update)) {
+      if ((update.kind === 'move' || update.kind === 'copy') && update.results && update.state === 'completed') {
+        this.#record({ kind: update.kind, results: update.results })
+      }
       if (update.kind === 'move' && update.results) {
         for (const result of update.results) {
           if (!result.skipped) appState.relocate(result.sourcePath, result.destinationPath)

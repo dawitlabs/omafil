@@ -183,7 +183,7 @@ async fn write_file_clipboard(paths: Vec<String>, is_cut: bool) -> Result<(), Di
 }
 
 #[tauri::command]
-async fn trash_paths(paths: Vec<String>) -> Result<(), DirectoryError> {
+async fn trash_paths(paths: Vec<String>) -> Result<Vec<String>, DirectoryError> {
     tauri::async_runtime::spawn_blocking(move || delete_entries(paths))
         .await
         .map_err(|_| DirectoryError::operation_failed())?

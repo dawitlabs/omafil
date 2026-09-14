@@ -305,6 +305,7 @@
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && !isTypingInto(event.target) && !fileOperations.renamingPath) {
       const shortcuts: Record<string, () => void> = {
         a: () => fileOperations.selectAll(),
+        z: () => void fileOperations.undo(),
         c: () => fileOperations.copySelection(),
         x: () => fileOperations.cutSelection(),
         v: () => void fileOperations.paste(),
