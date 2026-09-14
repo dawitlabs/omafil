@@ -4,24 +4,45 @@
   import FolderIcon from '@fluentui/svg-icons/icons/folder_20_regular.svg?no-inline'
   import FolderTree from './FolderTree.svelte'
   import { appState } from '../../appState.svelte'
+  import { fileOperations } from '../../fileOperations.svelte'
+  import { folderMenuItems } from '../../folderMenu'
+  import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
   import type { PathCrumb } from '../../navigation.svelte'
   import { tabs } from '../../tabs.svelte'
 
-  let { path, depth = 1, oncontext }: { path: string; depth?: number; oncontext?: (event: MouseEvent, folder: PathCrumb) => void } = $props()
+  let { path, depth = 1, onmenu }: { path: string; depth?: number; onmenu: (event: MouseEvent, items: ContextMenuItem[]) => void } = $props()
 
   let folders = $state<PathCrumb[]>([])
   let isLoading = $state(true)
   let failed = $state(false)
   let expanded = $state<string[]>([])
+  let renamingPath = $state<string | null>(null)
+  let renameDraft = $state('')
 
   const active = $derived(tabs.active)
 
-  $effect(() => {
-    const requested = path
+  function reload() {
+    folders = []
     isLoading = true
+    void load(path)
+  }
+
+  function startRename(folder: PathCrumb) {
+    renamingPath = folder.path
+    renameDraft = folder.name
+  }
+
+  async function commitRename(folder: PathCrumb) {
+    const name = renameDraft
+    renamingPath = null
+
+    if (await fileOperations.renamePath(folder.path, name)) reload()
+  }
+
+  function load(requested: string) {
     failed = false
 
-    invoke<PathCrumb[]>('list_subdirectories', { path: requested, showHidden: appState.settings.showHidden })
+    return invoke<PathCrumb[]>('list_subdirectories', { path: requested, showHidden: appState.settings.showHidden })
       .then((found) => {
         if (requested === path) folders = found
       })
@@ -31,6 +52,11 @@
       .finally(() => {
         if (requested === path) isLoading = false
       })
+  }
+
+  $effect(() => {
+    isLoading = true
+    void load(path)
   })
 
   function toggle(folderPath: string) {
@@ -56,20 +82,42 @@
       >
         <span class="masked-icon" style="--icon: url({ChevronRightIcon})" aria-hidden="true"></span>
       </button>
-      <button
-        class="file-sidebar__item file-sidebar__item--tree"
-        class:file-sidebar__item--active={active.isCurrentPath(folder.path)}
-        type="button"
-        aria-current={active.isCurrentPath(folder.path) ? 'page' : undefined}
-        onclick={() => active.open(folder.path)}
-        oncontextmenu={(event) => oncontext?.(event, folder)}
-      >
-        <span class="masked-icon file-sidebar__icon" style="--icon: url({FolderIcon})" aria-hidden="true"></span>
-        <span>{folder.name}</span>
-      </button>
+      {#if renamingPath === folder.path}
+        <div class="file-sidebar__item file-sidebar__item--tree file-sidebar__item--editing">
+          <span class="masked-icon file-sidebar__icon" style="--icon: url({FolderIcon})" aria-hidden="true"></span>
+          <!-- svelte-ignore a11y_autofocus -->
+          <input
+            class="file-sidebar__tag-input"
+            type="text"
+            autofocus
+            aria-label="Folder name"
+            bind:value={renameDraft}
+            onblur={() => commitRename(folder)}
+            onkeydown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur()
+              else if (event.key === 'Escape') renamingPath = null
+            }}
+          />
+        </div>
+      {:else}
+        <button
+          class="file-sidebar__item file-sidebar__item--tree"
+          class:file-sidebar__item--active={active.isCurrentPath(folder.path)}
+          type="button"
+          aria-current={active.isCurrentPath(folder.path) ? 'page' : undefined}
+          onclick={() => active.open(folder.path)}
+          oncontextmenu={(event) => {
+            event.preventDefault()
+            onmenu(event, folderMenuItems(folder.path, { onRename: () => startRename(folder), onChanged: reload }))
+          }}
+        >
+          <span class="masked-icon file-sidebar__icon" style="--icon: url({FolderIcon})" aria-hidden="true"></span>
+          <span>{folder.name}</span>
+        </button>
+      {/if}
     </div>
     {#if isOpen}
-      <FolderTree path={folder.path} depth={depth + 1} {oncontext} />
+      <FolderTree path={folder.path} depth={depth + 1} {onmenu} />
     {/if}
   {:else}
     <span class="file-sidebar__empty-state" style="--depth: {depth}">No folders</span>

@@ -22,7 +22,7 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
   import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
   import { appState } from '../../appState.svelte'
   import { driveStore } from '../../drives.svelte'
-  import { fileOperations } from '../../fileOperations.svelte'
+  import { folderMenuItems } from '../../folderMenu'
   import { knownLocations } from '../../navigation.svelte'
   import type { DriveInfo, KnownLocation } from '../../navigation.svelte'
   import { tabs } from '../../tabs.svelte'
@@ -77,19 +77,6 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
   function toggleDrive(drive: DriveInfo) {
     const key = drive.path
     expandedDrives = expandedDrives.includes(key) ? expandedDrives.filter((open) => open !== key) : [...expandedDrives, key]
-  }
-
-  function openFolderMenu(event: MouseEvent, folder: { name: string; path: string }) {
-    openMenu(event, [
-      { kind: 'action', label: 'Open', onSelect: () => active.open(folder.path) },
-      { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.open(); tabs.active.open(folder.path) } },
-      { kind: 'separator' },
-      { kind: 'action', label: 'Paste into folder', shortcut: 'Ctrl+V', disabled: !fileOperations.canPaste, onSelect: () => fileOperations.pasteTo(folder.path) },
-      { kind: 'separator' },
-      { kind: 'action', label: appState.isPinned(folder.path) ? 'Unpin from sidebar' : 'Pin to sidebar', onSelect: () => appState.togglePin(folder.path) },
-      { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(folder.path) },
-      { kind: 'action', label: 'Properties', onSelect: () => fileOperations.showProperties(folder.path) },
-    ])
   }
 
   async function openDrive(drive: DriveInfo) {
@@ -149,8 +136,7 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
           type="button"
           aria-current={active.isCurrentPath(pin.path) ? 'page' : undefined}
           onclick={() => active.open(pin.path)}
-          oncontextmenu={(event) =>
-            openMenu(event, [{ kind: 'action', label: 'Unpin from sidebar', onSelect: () => appState.togglePin(pin.path) }])}
+          oncontextmenu={(event) => openMenu(event, folderMenuItems(pin.path))}
         >
           <span class="masked-icon file-sidebar__icon" style="--icon: url({FolderIcon})" aria-hidden="true"></span>
           <span>{pin.label}</span>
@@ -181,7 +167,7 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
           type="button"
           aria-current={isLocationActive(item.location) ? 'page' : undefined}
           onclick={() => active.openLocation(item.location)}
-          oncontextmenu={(event) => openMenu(event, [{ kind: 'action', label: 'Open', onSelect: () => active.openLocation(item.location) }, { kind: 'action', label: 'Open in new tab', onSelect: async () => { const path = await invoke<string>('resolve_location', { location: item.location }); tabs.open(); tabs.active.open(path) } }, { kind: 'action', label: 'Open externally', onSelect: async () => active.openExternally(await invoke<string>('resolve_location', { location: item.location })) }, { kind: 'separator' }, { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: async () => fileOperations.cutPaths([await invoke<string>('resolve_location', { location: item.location })]) }, { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: async () => fileOperations.copyPaths([await invoke<string>('resolve_location', { location: item.location })]) }, { kind: 'action', label: 'Paste into folder', shortcut: 'Ctrl+V', disabled: !fileOperations.canPaste, onSelect: async () => fileOperations.pasteTo(await invoke<string>('resolve_location', { location: item.location })) }, { kind: 'separator' }, { kind: 'action', label: 'Pin to sidebar', onSelect: async () => appState.togglePin(await invoke<string>('resolve_location', { location: item.location })) }, { kind: 'action', label: 'Copy path', onSelect: async () => navigator.clipboard.writeText(await invoke<string>('resolve_location', { location: item.location })) }, { kind: 'action', label: 'Properties', onSelect: async () => fileOperations.showProperties(await invoke<string>('resolve_location', { location: item.location })) }, { kind: 'action', label: 'Refresh', onSelect: () => active.reload() }])}
+          oncontextmenu={(event) => { const path = locationPaths[item.location]; if (path) openMenu(event, folderMenuItems(path)) }}
         >
           <span class="masked-icon file-sidebar__icon" style="--icon: url({item.icon})" aria-hidden="true"></span>
           <span>{item.label}</span>
@@ -235,7 +221,7 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
             </button>
           </div>
           {#if drive.isMounted && isExpanded}
-            <FolderTree path={drive.path} oncontext={openFolderMenu} />
+            <FolderTree path={drive.path} onmenu={(event, items) => openMenu(event, items)} />
           {/if}
         {/each}
       {/if}

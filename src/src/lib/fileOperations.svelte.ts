@@ -2,7 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { readableError } from './errors'
 import { appState } from './appState.svelte'
 import { tabs } from './tabs.svelte'
-import type { DirectoryEntry } from './navigation.svelte'
+import type { DirectoryEntry, PathCrumb } from './navigation.svelte'
 import { isTerminal, reconcileOperation, remainingCutPaths, type FileOperation } from './operationState'
 export type { FileOperation, TransferResult } from './operationState'
 
@@ -52,6 +52,7 @@ class FileOperations {
   pendingPermanentDelete = $state<string[] | null>(null)
   archiveDraft = $state('Archive.zip')
   pendingArchivePaths = $state<string[] | null>(null)
+  archiveDestination = $state('')
   externalDropPaths = $state<string[] | null>(null)
   error = $state<string | null>(null)
   isBusy = $state(false)
@@ -233,18 +234,33 @@ class FileOperations {
   }
 
   async createFolder() {
-    const parentPath = this.directoryPath
+    await this.createFolderIn(this.directoryPath)
+  }
 
-    if (!parentPath) return
+  /** Resolves to the new folder, or null when it could not be created. */
+  async createFolderIn(parentPath: string): Promise<string | null> {
+    if (!parentPath) return null
 
-    const name = untakenFolderName(this.entries.map((entry) => entry.name))
+    const siblings =
+      parentPath === this.directoryPath
+        ? this.entries.map((entry) => entry.name)
+        : await invoke<PathCrumb[]>('list_subdirectories', { path: parentPath, showHidden: true })
+            .then((folders) => folders.map((folder) => folder.name))
+            .catch(() => [])
+    const name = untakenFolderName(siblings)
+    let created: string | null = null
 
     await this.#run(async () => {
-      const created = await invoke<string>('new_directory', { parentPath, name })
-      this.selectOnly(created)
-      this.renameDraft = name
-      this.renamingPath = created
+      created = await invoke<string>('new_directory', { parentPath, name })
+
+      if (parentPath === this.directoryPath) {
+        this.selectOnly(created)
+        this.renameDraft = name
+        this.renamingPath = created
+      }
     }, 'Unable to create that folder.')
+
+    return created
   }
 
   async rename(path: string, name: string = this.renameDraft) {
@@ -254,16 +270,31 @@ class FileOperations {
 
     if (!entry || name.trim() === entry.name) return
 
+    const renamed = await this.renamePath(path, name)
+    if (renamed) this.selectOnly(renamed)
+  }
+
+  /** Renames anything by path, whether or not it is in the folder on screen. */
+  async renamePath(path: string, name: string): Promise<string | null> {
+    const current = path.split('/').filter(Boolean).at(-1) ?? path
+
+    if (!name.trim() || name.trim() === current) return null
+
+    let renamed: string | null = null
+
     await this.#run(async () => {
-      const renamed = await invoke<string>('rename_path', { path, name })
+      renamed = await invoke<string>('rename_path', { path, name })
       appState.relocate(path, renamed)
-      this.selectOnly(renamed)
     }, 'Unable to rename that item.')
+
+    return renamed
   }
 
   async deleteSelection() {
-    const paths = this.selectedPaths
+    await this.deletePaths(this.selectedPaths)
+  }
 
+  async deletePaths(paths: string[]) {
     if (paths.length === 0) return
 
     const deleted = await this.#run(() => invoke('trash_paths', { paths }), 'Unable to move those items to the trash.')
@@ -274,8 +305,8 @@ class FileOperations {
     }
   }
 
-  requestPermanentDelete() {
-    if (this.selectedPaths.length > 0) this.pendingPermanentDelete = [...this.selectedPaths]
+  requestPermanentDelete(paths: string[] = this.selectedPaths) {
+    if (paths.length > 0) this.pendingPermanentDelete = [...paths]
   }
 
   cancelPermanentDelete() {
@@ -390,9 +421,16 @@ class FileOperations {
   }
 
   async compressSelection() {
-    const paths = this.selectedPaths
-    if (paths.length === 0 || !this.directoryPath) return
-    this.archiveDraft = paths.length === 1 ? `${this.entries.find((entry) => entry.path === paths[0])?.name ?? 'Archive'}.zip` : 'Archive.zip'
+    this.compressPaths(this.selectedPaths, this.directoryPath)
+  }
+
+  /** ZIPs anything by path, writing the archive into destinationPath. */
+  compressPaths(paths: string[], destinationPath: string) {
+    if (paths.length === 0 || !destinationPath) return
+
+    const only = paths.length === 1 ? (paths[0].split('/').filter(Boolean).at(-1) ?? 'Archive') : null
+    this.archiveDraft = `${only ?? 'Archive'}.zip`
+    this.archiveDestination = destinationPath
     this.pendingArchivePaths = [...paths]
   }
 
@@ -401,10 +439,11 @@ class FileOperations {
   async createArchive() {
     const paths = this.pendingArchivePaths
     const name = this.archiveDraft.trim()
-    if (!paths || !name || !this.directoryPath) return
+    const destinationPath = this.archiveDestination || this.directoryPath
+    if (!paths || !name || !destinationPath) return
     this.pendingArchivePaths = null
     try {
-      const queued = await invoke<{ id: string }>('queue_create_zip', { paths, destinationPath: this.directoryPath, name })
+      const queued = await invoke<{ id: string }>('queue_create_zip', { paths, destinationPath, name })
       this.operations = reconcileOperation(this.operations, { id: queued.id, kind: 'compress', state: 'queued', completedItems: 0, totalItems: 1, completedBytes: 0, totalBytes: null, currentName: name })
     } catch (error) {
       this.error = readableError(error, 'Unable to queue the ZIP archive.')
