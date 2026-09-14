@@ -4,6 +4,7 @@ use crate::paths::{resolve_entry_path, resolve_navigable_path, vacant_target};
 use std::{
     fs,
     path::{Path, PathBuf},
+    process::{Command, Stdio},
     sync::atomic::AtomicBool,
 };
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
@@ -139,7 +140,94 @@ pub(crate) fn extract_zip_with_context(
 ) -> Result<(), DirectoryError> {
     let archive_path = resolve_navigable_path(&path)?;
     let destination = resolve_navigable_path(&destination_path)?;
-    extract_at(&archive_path, &destination, context).map(|_| ())
+
+    let name = archive_path.file_name().unwrap_or_default().to_string_lossy();
+    if !is_extractable(&name) {
+        return Err(DirectoryError::detail("omafil cannot extract this kind of file."));
+    }
+
+    if has_extension(&archive_path, "zip") {
+        return extract_at(&archive_path, &destination, context).map(|_| ());
+    }
+
+    extract_with_libarchive(&archive_path, &destination, context).map(|_| ())
+}
+
+/// Everything libarchive reads, which on Arch is everything pacman ships with.
+const EXTRACTABLE_EXTENSIONS: [&str; 17] = [
+    "zip", "tar", "gz", "tgz", "bz2", "tbz", "tbz2", "xz", "txz", "zst", "tzst", "lz4", "lzma",
+    "7z", "iso", "cab", "rar",
+];
+
+pub(crate) fn is_extractable(name: &str) -> bool {
+    let Some((_, extension)) = name.rsplit_once('.') else {
+        return false;
+    };
+
+    EXTRACTABLE_EXTENSIONS.contains(&extension.to_lowercase().as_str())
+}
+
+fn has_extension(path: &Path, extension: &str) -> bool {
+    path.extension()
+        .and_then(|found| found.to_str())
+        .is_some_and(|found| found.eq_ignore_ascii_case(extension))
+}
+
+/// bsdtar comes from libarchive, which pacman itself depends on, so it is always
+/// present. It reports no byte progress, so the operation shows its file count only.
+// ponytail: no per-entry progress. Parse `-v` output if a progress bar matters.
+fn extract_with_libarchive(
+    archive_path: &Path,
+    destination: &Path,
+    context: &mut OperationContext<'_>,
+) -> Result<PathBuf, DirectoryError> {
+    context.check()?;
+    let target = extraction_target(destination, archive_path)?;
+    let stage = StagedOutput::new(destination)?;
+    fs::create_dir(&stage.path)?;
+
+    let mut child = Command::new("bsdtar")
+        .arg("--extract")
+        .arg("--no-same-owner")
+        .arg("--file")
+        .arg(archive_path)
+        .arg("--directory")
+        .arg(&stage.path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|_| DirectoryError::detail("bsdtar is not installed, so this archive cannot be opened."))?;
+
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if context.check().is_err() {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(DirectoryError::cancelled());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+
+    if !status.success() {
+        let mut stderr = String::new();
+        if let Some(mut pipe) = child.stderr.take() {
+            use std::io::Read;
+            let _ = pipe.read_to_string(&mut stderr);
+        }
+        let reason = stderr.lines().last().unwrap_or("").trim();
+
+        return Err(DirectoryError::detail(if reason.is_empty() {
+            "This archive could not be extracted.".to_owned()
+        } else {
+            reason.to_owned()
+        }));
+    }
+
+    context.current(&target);
+    stage.publish(&target, false, context)?;
+    Ok(target)
 }
 
 fn extraction_target(destination: &Path, archive_path: &Path) -> Result<PathBuf, DirectoryError> {
@@ -147,6 +235,7 @@ fn extraction_target(destination: &Path, archive_path: &Path) -> Result<PathBuf,
         .file_stem()
         .and_then(|name| name.to_str())
         .unwrap_or("Archive");
+    let stem = stem.strip_suffix(".tar").unwrap_or(stem);
     let stem = if stem.is_empty() || stem == "." || stem == ".." {
         "Archive"
     } else {
@@ -366,5 +455,60 @@ mod tests {
         )
         .is_err());
         assert_eq!(fs::read_dir(root.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn a_tar_zst_extracts_through_libarchive() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("payload");
+        fs::create_dir(&source).unwrap();
+        fs::write(source.join("hello.txt"), "hi").unwrap();
+
+        let archive = directory.path().join("bundle.tar.zst");
+        let made = Command::new("bsdtar")
+            .args(["--create", "--zstd", "--file"])
+            .arg(&archive)
+            .args(["--directory"])
+            .arg(directory.path())
+            .arg("payload")
+            .status()
+            .unwrap();
+        assert!(made.success());
+
+        let destination = directory.path().join("out");
+        fs::create_dir(&destination).unwrap();
+        let cancel = AtomicBool::new(false);
+        let mut context = OperationContext::new(&cancel, |_| {});
+
+        let target = extract_with_libarchive(&archive, &destination, &mut context).unwrap();
+
+        assert_eq!(target.file_name().unwrap(), "bundle");
+        assert_eq!(fs::read_to_string(target.join("payload/hello.txt")).unwrap(), "hi");
+    }
+
+    #[test]
+    fn a_broken_archive_reports_why_instead_of_leaving_a_folder_behind() {
+        let directory = tempfile::tempdir().unwrap();
+        let archive = directory.path().join("broken.tar.gz");
+        fs::write(&archive, b"this is not a gzip stream").unwrap();
+        let destination = directory.path().join("out");
+        fs::create_dir(&destination).unwrap();
+        let cancel = AtomicBool::new(false);
+        let mut context = OperationContext::new(&cancel, |_| {});
+
+        assert!(extract_with_libarchive(&archive, &destination, &mut context).is_err());
+        assert_eq!(fs::read_dir(&destination).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn extractable_extensions_cover_what_arch_users_meet() {
+        for name in ["a.tar.gz", "a.tar.zst", "a.7z", "a.zip", "a.TAR.XZ", "a.rar"] {
+            assert!(is_extractable(name), "{name} should be extractable");
+        }
+        assert!(!is_extractable("notes.txt"));
+        assert!(!is_extractable("noextension"));
+        // a bare "zip" is a file called zip, not a zip archive
+        assert!(!is_extractable("zip"));
+        assert!(!is_extractable(".zshrc"));
     }
 }

@@ -4,6 +4,7 @@ import { appState } from './appState.svelte'
 import { tabs } from './tabs.svelte'
 import type { DirectoryEntry, PathCrumb } from './navigation.svelte'
 import { isTerminal, reconcileOperation, remainingCutPaths, type FileOperation } from './operationState'
+import { isExtractable } from './archives'
 import { parentOf, planUndo, pushEntry, type UndoEntry } from './undo'
 export type { FileOperation, TransferResult } from './operationState'
 
@@ -520,7 +521,7 @@ class FileOperations {
 
   async extractSelection() {
     const path = this.selectedPaths[0]
-    if (!path || !this.directoryPath || !path.toLowerCase().endsWith('.zip')) return
+    if (!path || !this.directoryPath || !isExtractable(path)) return
     try {
       const queued = await invoke<{ id: string }>('queue_extract_zip', { path, destinationPath: this.directoryPath })
       this.operations = reconcileOperation(this.operations, { id: queued.id, kind: 'extract', state: 'queued', completedItems: 0, totalItems: 1, completedBytes: 0, totalBytes: null, currentName: path.split('/').at(-1) ?? path })

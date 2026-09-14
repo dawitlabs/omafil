@@ -6,6 +6,7 @@
   import FileRow from '../FileRow/FileRow.svelte'
   import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
   import { appState } from '../../appState.svelte'
+  import { isExtractable } from '../../archives'
   import { fileOperations } from '../../fileOperations.svelte'
   import { formatCount } from '../../format'
   import { tabs } from '../../tabs.svelte'
@@ -84,7 +85,7 @@
         { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => fileOperations.copySelection() },
         { kind: 'separator' },
         ...(fileOperations.selectedPaths.length > 1 ? [{ kind: 'action', label: 'Compress to ZIP', onSelect: () => fileOperations.compressSelection() } as ContextMenuItem] : []),
-        { kind: 'action', label: 'Extract here', disabled: !entry.name.toLowerCase().endsWith('.zip'), onSelect: () => fileOperations.extractSelection() },
+        { kind: 'action', label: 'Extract here', disabled: !isExtractable(entry.name), onSelect: () => fileOperations.extractSelection() },
         { kind: 'separator' },
         {
           kind: 'action',
