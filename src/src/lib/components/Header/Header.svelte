@@ -7,7 +7,6 @@
   import DismissIcon from '@fluentui/svg-icons/icons/dismiss_20_regular.svg?no-inline'
   import FolderIcon from '@fluentui/svg-icons/icons/folder_20_regular.svg?no-inline'
   import HomeIcon from '@fluentui/svg-icons/icons/home_20_regular.svg?no-inline'
-  import MicIcon from '@fluentui/svg-icons/icons/mic_20_regular.svg?no-inline'
   import MinimizeIcon from '@fluentui/svg-icons/icons/subtract_20_regular.svg?no-inline'
   import SearchIcon from '@fluentui/svg-icons/icons/search_20_regular.svg?no-inline'
   import SettingsIcon from '@fluentui/svg-icons/icons/settings_20_regular.svg?no-inline'
@@ -234,7 +233,6 @@
           }
         }}
       />
-      <span class="masked-icon app-header__icon" style="--icon: url({MicIcon})" aria-hidden="true"></span>
     </label>
   </div>
 </header>
