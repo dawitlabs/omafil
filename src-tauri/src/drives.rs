@@ -142,6 +142,73 @@ pub(crate) fn unmount_drive(device: &str) -> Result<(), DirectoryError> {
     udisks(&["unmount", "-b", &device.path]).map(drop)
 }
 
+const FORMAT_FILESYSTEMS: [&str; 5] = ["vfat", "exfat", "ntfs", "ext4", "btrfs"];
+
+/// udev names a block device object by escaping every byte outside [A-Za-z0-9_] as `_<hex>`,
+/// so `/dev/dm-0` becomes `.../block_devices/dm_2d0`.
+fn udisks_object_path(device: &str) -> String {
+    let escaped = device
+        .trim_start_matches("/dev/")
+        .bytes()
+        .map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' => (byte as char).to_string(),
+            _ => format!("_{byte:02x}"),
+        })
+        .collect::<String>();
+
+    format!("/org/freedesktop/UDisks2/block_devices/{escaped}")
+}
+
+/// udisksctl cannot format, so this goes straight to the UDisks2 method behind it.
+/// polkit still gates the call, which keeps omafil itself out of root.
+pub(crate) fn format_drive(device: &str, filesystem: &str, label: &str) -> Result<(), DirectoryError> {
+    if !FORMAT_FILESYSTEMS.contains(&filesystem) {
+        return Err(DirectoryError::detail("That filesystem is not supported."));
+    }
+    if label.contains('\'') {
+        return Err(DirectoryError::detail("A drive name cannot contain an apostrophe."));
+    }
+
+    let device = known_device(device)?;
+    if device.mountpoint.is_some() {
+        if !device.is_removable() {
+            return Err(DirectoryError::detail("Internal drives have to be unmounted before they can be formatted."));
+        }
+        udisks(&["unmount", "-b", &device.path])?;
+    }
+
+    let mut options = vec!["'take-ownership': <true>".to_owned()];
+    if !label.is_empty() {
+        options.push(format!("'label': <'{label}'>"));
+    }
+    let options = format!("{{{}}}", options.join(", "));
+
+    let output = Command::new("gdbus")
+        .args([
+            "call",
+            "--system",
+            "--dest",
+            "org.freedesktop.UDisks2",
+            "--object-path",
+            &udisks_object_path(&device.path),
+            "--method",
+            "org.freedesktop.UDisks2.Block.Format",
+            filesystem,
+            &options,
+        ])
+        .output()
+        .map_err(|_| DirectoryError::detail("gdbus is not installed on this system."))?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let reason = stderr.trim().rsplit(": ").next().unwrap_or("").trim_end_matches('.').to_owned();
+
+    Err(DirectoryError::detail(if reason.is_empty() { "The drive could not be formatted.".to_owned() } else { reason }))
+}
+
 pub(crate) fn eject_drive(device: &str) -> Result<(), DirectoryError> {
     let device = known_device(device)?;
 

@@ -45,3 +45,16 @@
 .dialog__footer .dialog__primary { border-color: var(--accent); color: var(--text-on-accent); background: var(--accent); }
 .dialog__footer .dialog__primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
 .dialog__footer .dialog__primary:disabled { border-color: var(--border-subtle); color: var(--text-disabled); background: var(--surface-card); }
+
+.dialog__footer .dialog__danger { border-color: var(--danger-strong); color: #fff; background: var(--danger-strong); }
+.dialog__footer .dialog__danger:hover:not(:disabled) { filter: brightness(1.08); }
+.dialog__footer .dialog__danger:disabled { border-color: var(--border-subtle); color: var(--text-disabled); background: var(--surface-card); }
+
+.format-drive__body { display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+.format-drive__warning { margin: 0; padding: 10px 12px; border: 1px solid var(--border-danger); border-radius: 4px; color: var(--text-danger); background: var(--surface-danger); font-size: 13px; line-height: 1.5; }
+.format-drive__field { display: flex; flex-direction: column; gap: 6px; color: var(--text-secondary); font-size: 12px; }
+.format-drive__field select,
+.format-drive__field input { height: 32px; padding: 0 8px; border: 1px solid var(--border-subtle); border-radius: 4px; color: var(--text-primary); background: var(--surface-input); font-size: 13px; }
+.format-drive__field select:focus-visible,
+.format-drive__field input:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.format-drive__error { margin: 0; color: var(--text-danger); font-size: 12px; }

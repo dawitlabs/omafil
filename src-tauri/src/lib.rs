@@ -122,6 +122,13 @@ async fn eject_drive(device: String) -> Result<(), DirectoryError> {
 }
 
 #[tauri::command]
+async fn format_drive(device: String, filesystem: String, label: String) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || drives::format_drive(&device, &filesystem, &label))
+        .await
+        .map_err(|_| DirectoryError::detail("The drive could not be formatted."))?
+}
+
+#[tauri::command]
 async fn set_default_opener(path: String, desktop_id: String) -> Result<(), DirectoryError> {
     tauri::async_runtime::spawn_blocking(move || openers::set_default_opener(path, desktop_id))
         .await
@@ -417,6 +424,7 @@ async fn clear_recent_file_history() -> Result<(), RecentFilesError> {
             cancel_operation,
             queue_create_zip,
             queue_extract_zip,
+            format_drive,
             permanently_delete_paths,
             create_zip,
             extract_zip,
