@@ -144,6 +144,26 @@ pub(crate) fn read_directory_entries(
     Ok((entries, total))
 }
 
+/// The sidebar tree only needs the folders, and only their names, so it never pays
+/// for the stat calls or the pagination that a full listing carries.
+pub(crate) fn read_subdirectories(path: &str, show_hidden: bool) -> Result<Vec<PathCrumb>, DirectoryError> {
+    let directory = resolve_navigable_path(path)?;
+    let mut folders: Vec<PathCrumb> = fs::read_dir(&directory)
+        .map_err(|_| DirectoryError::read_failed())?
+        .flatten()
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+        .map(|entry| PathCrumb {
+            name: entry.file_name().to_string_lossy().into_owned(),
+            path: entry.path().to_string_lossy().into_owned(),
+        })
+        .filter(|folder| show_hidden || !folder.name.starts_with('.'))
+        .collect();
+
+    folders.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+
+    Ok(folders)
+}
+
 pub(crate) fn path_crumbs(directory: &Path, roots: &[PathBuf]) -> Vec<PathCrumb> {
     let Some(root) = roots
         .iter()

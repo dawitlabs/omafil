@@ -23,6 +23,7 @@
         describe_path: (a) => { const p = a.path.slice(0, a.path.lastIndexOf('/')), n = a.path.slice(p.length + 1)
           const r = (raw[p] ?? []).find((x) => x[0] === n); if (!r) throw { message: 'gone' }; return mk(p, r) },
         search_files: () => ({ entries: [], truncated: false }),
+        list_subdirectories: (a) => (raw[a.path] ?? []).filter((r) => r[1] === 'd').map((r) => ({ name: r[0], path: `${a.path}/${r[0]}` })),
         watch_directories: () => null, unwatch_directory: () => null,
         load_state: () => stored, save_state: (a) => { stored = a.state; return null },
         open_path: () => null, new_directory: () => `${HOME}/x`, trash_paths: () => null, transfer_paths: () => null,

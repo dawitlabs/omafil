@@ -25,7 +25,7 @@ use crate::archive::{create_zip as write_zip, extract_zip as unpack_zip};
 use crate::error::{DirectoryError, DriveError, RecentFilesError};
 use crate::listing::{
     describe_path as read_path_description, read_directory_listing, DirectoryEntry,
-    DirectoryListing, EntrySort,
+    DirectoryListing, EntrySort, PathCrumb,
 };
 use crate::inspect::{inspect_path as read_path_inspection, set_permissions as write_permissions, PathInspection};
 use crate::operations::{create_directory, delete_entries, find_transfer_conflicts, permanently_delete_entries, rename_entry, transfer_entries, TransferConflict, TransferConflictPolicy, TransferResult};
@@ -45,6 +45,13 @@ async fn resolve_location(location: String) -> Result<String, DirectoryError> {
     })
     .await
     .map_err(|_| DirectoryError::unavailable())?
+}
+
+#[tauri::command]
+async fn list_subdirectories(path: String, show_hidden: bool) -> Result<Vec<PathCrumb>, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || listing::read_subdirectories(&path, show_hidden))
+        .await
+        .map_err(|_| DirectoryError::read_failed())?
 }
 
 #[tauri::command]
@@ -115,17 +122,17 @@ async fn unmount_drive(device: String) -> Result<(), DirectoryError> {
 }
 
 #[tauri::command]
-async fn eject_drive(device: String) -> Result<(), DirectoryError> {
-    tauri::async_runtime::spawn_blocking(move || drives::eject_drive(&device))
-        .await
-        .map_err(|_| DirectoryError::operation_failed())?
-}
-
-#[tauri::command]
 async fn format_drive(device: String, filesystem: String, label: String) -> Result<(), DirectoryError> {
     tauri::async_runtime::spawn_blocking(move || drives::format_drive(&device, &filesystem, &label))
         .await
         .map_err(|_| DirectoryError::detail("The drive could not be formatted."))?
+}
+
+#[tauri::command]
+async fn eject_drive(device: String) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || drives::eject_drive(&device))
+        .await
+        .map_err(|_| DirectoryError::operation_failed())?
 }
 
 #[tauri::command]
@@ -164,6 +171,18 @@ async fn rename_path(path: String, name: String) -> Result<String, DirectoryErro
 }
 
 #[tauri::command]
+async fn read_file_clipboard() -> Option<(Vec<String>, bool)> {
+    tauri::async_runtime::spawn_blocking(clipboard::read_file_clipboard).await.ok().flatten()
+}
+
+#[tauri::command]
+async fn write_file_clipboard(paths: Vec<String>, is_cut: bool) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || clipboard::write_file_clipboard(&paths, is_cut))
+        .await
+        .map_err(|_| DirectoryError::detail("The clipboard could not be written."))?
+}
+
+#[tauri::command]
 async fn trash_paths(paths: Vec<String>) -> Result<(), DirectoryError> {
     tauri::async_runtime::spawn_blocking(move || delete_entries(paths))
         .await
@@ -177,18 +196,6 @@ async fn transfer_paths(
     is_move: bool,
     conflict_policy: TransferConflictPolicy,
 ) -> Result<Vec<TransferResult>, DirectoryError> {
-#[tauri::command]
-async fn read_file_clipboard() -> Option<(Vec<String>, bool)> {
-    tauri::async_runtime::spawn_blocking(clipboard::read_file_clipboard).await.ok().flatten()
-}
-
-#[tauri::command]
-async fn write_file_clipboard(paths: Vec<String>, is_cut: bool) -> Result<(), DirectoryError> {
-    tauri::async_runtime::spawn_blocking(move || clipboard::write_file_clipboard(&paths, is_cut))
-        .await
-        .map_err(|_| DirectoryError::detail("The clipboard could not be written."))?
-}
-
     tauri::async_runtime::spawn_blocking(move || {
         transfer_entries(paths, destination_path, is_move, conflict_policy)
     })
@@ -360,6 +367,13 @@ async fn list_recent_files() -> Result<Vec<RecentFile>, RecentFilesError> {
 }
 
 #[tauri::command]
+async fn clear_recent_file_history() -> Result<(), RecentFilesError> {
+    tauri::async_runtime::spawn_blocking(clear_recent_files)
+        .await
+        .map_err(|_| RecentFilesError::clear_failed())?
+}
+
+#[tauri::command]
 async fn list_drives() -> Result<Vec<DriveInfo>, DriveError> {
     tauri::async_runtime::spawn_blocking(read_drives)
         .await
@@ -386,13 +400,6 @@ pub fn run() {
             // udev keeps this directory in step with attached block devices.
             let by_path = std::path::PathBuf::from("/dev/disk/by-path");
             let drive_handle = app.handle().clone();
-#[tauri::command]
-async fn clear_recent_file_history() -> Result<(), RecentFilesError> {
-    tauri::async_runtime::spawn_blocking(clear_recent_files)
-        .await
-        .map_err(|_| RecentFilesError::clear_failed())?
-}
-
             if by_path.is_dir() {
                 if let Ok(drive_watcher) = crate::watcher::start_watch(by_path, move |_| {
                     let _ = drive_handle.emit("drives-changed", ());
@@ -405,6 +412,7 @@ async fn clear_recent_file_history() -> Result<(), RecentFilesError> {
         .invoke_handler(tauri::generate_handler![
             resolve_location,
             list_directory,
+            list_subdirectories,
             open_path,
             open_terminal,
             open_in_editor,
@@ -416,15 +424,17 @@ async fn clear_recent_file_history() -> Result<(), RecentFilesError> {
             mount_drive,
             unmount_drive,
             eject_drive,
+            format_drive,
             new_directory,
             rename_path,
+            read_file_clipboard,
+            write_file_clipboard,
             trash_paths,
             transfer_paths,
             queue_transfer,
             cancel_operation,
             queue_create_zip,
             queue_extract_zip,
-            format_drive,
             permanently_delete_paths,
             create_zip,
             extract_zip,
@@ -435,8 +445,6 @@ async fn clear_recent_file_history() -> Result<(), RecentFilesError> {
             inspect_path,
             set_permissions,
             describe_path,
-            read_file_clipboard,
-            write_file_clipboard,
             search_files,
             watch_directories,
             unwatch_directory,
@@ -446,9 +454,9 @@ async fn clear_recent_file_history() -> Result<(), RecentFilesError> {
             load_state,
             save_state,
             list_recent_files,
+            clear_recent_file_history,
             list_drives
         ])
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");
 }
-            clear_recent_file_history,

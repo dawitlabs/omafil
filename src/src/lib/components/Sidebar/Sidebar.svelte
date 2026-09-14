@@ -16,7 +16,9 @@
   import UsbStickIcon from '@fluentui/svg-icons/icons/usb_stick_20_regular.svg?no-inline'
   import VideoIcon from '@fluentui/svg-icons/icons/video_20_regular.svg?no-inline'
   import DeleteIcon from '@fluentui/svg-icons/icons/delete_20_regular.svg?no-inline'
+import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular.svg?no-inline'
   import ContextMenu from '../ContextMenu/ContextMenu.svelte'
+  import FolderTree from './FolderTree.svelte'
   import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
   import { appState } from '../../appState.svelte'
   import { driveStore } from '../../drives.svelte'
@@ -41,6 +43,7 @@
   ]
 
   let locationPaths = $state<Partial<Record<KnownLocation, string>>>({})
+  let expandedDrives = $state<string[]>([])
   let newTagLabel = $state<string | null>(null)
   let menu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null)
 
@@ -69,6 +72,24 @@
     if (label) appState.createTag(label)
 
     newTagLabel = null
+  }
+
+  function toggleDrive(drive: DriveInfo) {
+    const key = drive.path
+    expandedDrives = expandedDrives.includes(key) ? expandedDrives.filter((open) => open !== key) : [...expandedDrives, key]
+  }
+
+  function openFolderMenu(event: MouseEvent, folder: { name: string; path: string }) {
+    openMenu(event, [
+      { kind: 'action', label: 'Open', onSelect: () => active.open(folder.path) },
+      { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.open(); tabs.active.open(folder.path) } },
+      { kind: 'separator' },
+      { kind: 'action', label: 'Paste into folder', shortcut: 'Ctrl+V', disabled: !fileOperations.canPaste, onSelect: () => fileOperations.pasteTo(folder.path) },
+      { kind: 'separator' },
+      { kind: 'action', label: appState.isPinned(folder.path) ? 'Unpin from sidebar' : 'Pin to sidebar', onSelect: () => appState.togglePin(folder.path) },
+      { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(folder.path) },
+      { kind: 'action', label: 'Properties', onSelect: () => fileOperations.showProperties(folder.path) },
+    ])
   }
 
   async function openDrive(drive: DriveInfo) {
@@ -181,21 +202,41 @@
         <span class="file-sidebar__empty-state">No drives</span>
       {:else}
         {#each driveStore.drives as drive (drive.device ?? drive.mountPoint)}
-          <button
-            class="file-sidebar__item"
-            class:file-sidebar__item--active={drive.isMounted && active.isCurrentPath(drive.path)}
-            class:file-sidebar__item--unmounted={!drive.isMounted}
-            type="button"
-            aria-current={drive.isMounted && active.isCurrentPath(drive.path) ? 'page' : undefined}
-            title={drive.isMounted ? undefined : 'Not mounted. Click to mount.'}
-            onclick={() => openDrive(drive)}
-            oncontextmenu={(event) => openMenu(event, drive.isMounted
-              ? [...driveStore.menuItems(drive, (path) => active.open(path)), { kind: 'separator' }, { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.open(); tabs.active.open(drive.path) } }, { kind: 'action', label: appState.isPinned(drive.path) ? 'Unpin from sidebar' : 'Pin to sidebar', onSelect: () => appState.togglePin(drive.path) }, { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(drive.path) }]
-              : driveStore.menuItems(drive, (path) => active.open(path)))}
-          >
-            <span class="masked-icon file-sidebar__icon" style="--icon: url({drive.isRemovable ? UsbStickIcon : HardDriveIcon})" aria-hidden="true"></span>
-            <span>{drive.name || drive.mountPoint}</span>
-          </button>
+          {@const isExpanded = expandedDrives.includes(drive.path)}
+          <div class="file-sidebar__tree-row" style="--depth: 0">
+            {#if drive.isMounted}
+              <button
+                class="file-sidebar__twisty"
+                class:file-sidebar__twisty--open={isExpanded}
+                type="button"
+                aria-expanded={isExpanded}
+                aria-label={isExpanded ? `Collapse ${drive.name || drive.mountPoint}` : `Expand ${drive.name || drive.mountPoint}`}
+                onclick={() => toggleDrive(drive)}
+              >
+                <span class="masked-icon" style="--icon: url({ChevronRightIcon})" aria-hidden="true"></span>
+              </button>
+            {:else}
+              <span class="file-sidebar__twisty file-sidebar__twisty--empty" aria-hidden="true"></span>
+            {/if}
+            <button
+              class="file-sidebar__item file-sidebar__item--tree"
+              class:file-sidebar__item--active={drive.isMounted && active.isCurrentPath(drive.path)}
+              class:file-sidebar__item--unmounted={!drive.isMounted}
+              type="button"
+              aria-current={drive.isMounted && active.isCurrentPath(drive.path) ? 'page' : undefined}
+              title={drive.isMounted ? undefined : 'Not mounted. Click to mount.'}
+              onclick={() => openDrive(drive)}
+              oncontextmenu={(event) => openMenu(event, drive.isMounted
+                ? [...driveStore.menuItems(drive, (path) => active.open(path)), { kind: 'separator' }, { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.open(); tabs.active.open(drive.path) } }, { kind: 'action', label: appState.isPinned(drive.path) ? 'Unpin from sidebar' : 'Pin to sidebar', onSelect: () => appState.togglePin(drive.path) }, { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(drive.path) }]
+                : driveStore.menuItems(drive, (path) => active.open(path)))}
+            >
+              <span class="masked-icon file-sidebar__icon" style="--icon: url({drive.isRemovable ? UsbStickIcon : HardDriveIcon})" aria-hidden="true"></span>
+              <span>{drive.name || drive.mountPoint}</span>
+            </button>
+          </div>
+          {#if drive.isMounted && isExpanded}
+            <FolderTree path={drive.path} oncontext={openFolderMenu} />
+          {/if}
         {/each}
       {/if}
       {#if driveStore.actionError}
