@@ -34,7 +34,13 @@ cd ../src-tauri && cargo tauri dev
 ```
 
 Tests: `cargo test` in `src-tauri`, `bun test` and `bun run check` in `src`.
-`src/preview.html` runs the UI under plain `vite` with a mocked backend for screenshots; `src/tests/shot.mjs` drives it with Playwright.
+`src/preview.html` runs the UI under plain `vite` with a mocked backend; `src/tests/shot.mjs` takes
+screenshots of it and `src/tests/e2e.mjs` checks the golden paths through it:
+
+```sh
+cd src && bunx vite --port 1420 &
+PLAYWRIGHT_DIR=<a node_modules holding playwright> node src/tests/e2e.mjs
+```
 
 ## Install
 

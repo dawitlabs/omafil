@@ -35,3 +35,56 @@ describe('operation event ordering', () => {
     expect(operationPercent({ ...operation, state: 'completed' })).toBe(100)
   })
 })
+
+describe('reconcileOperation gaps', () => {
+  test('an event for an unknown job registers it instead of being dropped', () => {
+    expect(reconcileOperation([], { ...operation, state: 'running' })).toHaveLength(1)
+  })
+
+  test('a queued event cannot pull a running job backwards', () => {
+    const running = [{ ...operation, state: 'running' as const }]
+
+    expect(reconcileOperation(running, operation)).toBe(running)
+  })
+
+  test('jobs that are not the one updating are left alone', () => {
+    const other = { ...operation, id: 'operation-2' }
+    const next = reconcileOperation([operation, other], { ...operation, state: 'running' })
+
+    expect(next.find((job) => job.id === 'operation-2')).toBe(other)
+  })
+})
+
+describe('operationPercent gaps', () => {
+  test('is unknown while the total size is still being measured', () => {
+    expect(operationPercent({ ...operation, totalBytes: null })).toBeUndefined()
+  })
+
+  test('falls back to counting items when the job carries no bytes', () => {
+    expect(operationPercent({ ...operation, totalBytes: 0, totalItems: 4, completedItems: 1 })).toBe(25)
+  })
+
+  test('is zero, not NaN, for a job with neither bytes nor items', () => {
+    expect(operationPercent({ ...operation, totalBytes: 0, totalItems: 0 })).toBe(0)
+  })
+
+  test('never reports a negative or over-full bar', () => {
+    expect(operationPercent({ ...operation, totalBytes: 100, completedBytes: -5 })).toBe(0)
+    expect(operationPercent({ ...operation, totalBytes: 100, completedBytes: 500 })).toBe(99)
+  })
+})
+
+describe('remainingCutPaths gaps', () => {
+  test('keeps every path when the move reported nothing', () => {
+    expect(remainingCutPaths(['/a', '/b'], [])).toEqual(['/a', '/b'])
+  })
+
+  test('clears the clipboard once everything moved', () => {
+    const results = [
+      { sourcePath: '/a', destinationPath: '/x/a', skipped: false },
+      { sourcePath: '/b', destinationPath: '/x/b', skipped: false },
+    ]
+
+    expect(remainingCutPaths(['/a', '/b'], results)).toEqual([])
+  })
+})
