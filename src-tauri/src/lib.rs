@@ -30,7 +30,7 @@ use crate::inspect::{inspect_path as read_path_inspection, set_permissions as wr
 use crate::operations::{create_directory, delete_entries, find_transfer_conflicts, permanently_delete_entries, rename_entry, transfer_entries, TransferConflict, TransferConflictPolicy, TransferResult};
 use crate::operation_queue::{OperationQueue, QueuedOperation};
 use crate::paths::{known_directory_path, resolve_navigable_path};
-use crate::recent::{read_recent_files, RecentFile};
+use crate::recent::{clear_recent_files, read_recent_files, RecentFile};
 use crate::recycle::{empty_recycle_bin as purge_recycle_bin, list_recycle_bin, restore_recycle_items as restore_items, RecycleItem};
 use crate::search::{search_directory, SearchGeneration, SearchResults};
 use crate::store::{read_state, write_state, AppState, StoreError};
@@ -366,6 +366,13 @@ pub fn run() {
             // udev keeps this directory in step with attached block devices.
             let by_path = std::path::PathBuf::from("/dev/disk/by-path");
             let drive_handle = app.handle().clone();
+#[tauri::command]
+async fn clear_recent_file_history() -> Result<(), RecentFilesError> {
+    tauri::async_runtime::spawn_blocking(clear_recent_files)
+        .await
+        .map_err(|_| RecentFilesError::clear_failed())?
+}
+
             if by_path.is_dir() {
                 if let Ok(drive_watcher) = crate::watcher::start_watch(by_path, move |_| {
                     let _ = drive_handle.emit("drives-changed", ());
@@ -421,3 +428,4 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running Tauri application");
 }
+            clear_recent_file_history,

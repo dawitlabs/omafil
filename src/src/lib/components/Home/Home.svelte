@@ -51,6 +51,15 @@
     if (path) tabs.active.open(path)
   }
 
+  async function clearRecentFiles() {
+    try {
+      await invoke('clear_recent_file_history')
+      recentFiles = []
+    } catch (error) {
+      recentFilesError = readableError(error, 'Unable to clear recently used files.')
+    }
+  }
+
   async function loadRecentFiles() {
     isLoadingRecentFiles = true
     recentFilesError = null
@@ -186,6 +195,9 @@
       <section class="home-view__section" aria-labelledby="recent-heading">
         <h2 id="recent-heading" class="home-view__heading">
           <span class="masked-icon home-view__heading-icon" style="--icon: url({ClockIcon})" aria-hidden="true"></span><span>Recently used files</span>
+          {#if recentFiles.length > 0}
+            <button class="home-view__retry" type="button" onclick={clearRecentFiles}>Clear</button>
+          {/if}
         </h2>
         {#if isLoadingRecentFiles}
           <p class="home-view__state">Loading recently used files…</p>

@@ -12,7 +12,7 @@ pub(crate) struct DriveError {
     message: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub(crate) struct RecentFilesError {
     code: &'static str,
     message: &'static str,
@@ -102,6 +102,13 @@ impl RecentFilesError {
         Self {
             code: "recent_files_unavailable",
             message: "Unable to read recent files from this desktop.",
+        }
+    }
+
+    pub(crate) const fn clear_failed() -> Self {
+        Self {
+            code: "recent_files_clear_failed",
+            message: "Unable to clear the list of recently used files.",
         }
     }
 }

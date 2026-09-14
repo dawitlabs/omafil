@@ -11,6 +11,7 @@
         settings: { showHidden: false, theme: params.get('theme') ?? 'light', defaultSort: 'name', defaultDescending: false, vimKeys: Boolean(params.get('vim')) } }
       const mk = (p, [name, kind, size, modified]) => ({ name, path: `${p}/${name}`, entryType: kind === 'd' ? 'directory' : 'file', size, modified })
       const listeners = {}
+      let recent = [{ name: 'notes.txt', path: `${HOME}/Documents/notes.txt`, parentDirectory: `${HOME}/Documents` }, { name: 'shot.png', path: `${HOME}/Pictures/shot.png`, parentDirectory: `${HOME}/Pictures` }]
       const mock = {
         resolve_location: (a) => (a.location === 'home' ? HOME : `${HOME}/${a.location[0].toUpperCase()}${a.location.slice(1)}`),
         list_directory: (a) => { const rows = [...(raw[a.path] ?? [])].sort((x, y) => ((y[1] === 'd') - (x[1] === 'd')) || x[0].localeCompare(y[0]))
@@ -26,7 +27,7 @@
         load_state: () => stored, save_state: (a) => { stored = a.state; return null },
         open_path: () => null, new_directory: () => `${HOME}/x`, trash_paths: () => null, transfer_paths: () => null,
         list_drives: () => [{ name: 'dave', mountPoint: '/', path: HOME, totalBytes: 500 * GB, availableBytes: 330 * GB, isRemovable: false, isReadOnly: false, isMounted: true, device: '/dev/mapper/root' }, ...(params.get('usb') ? [{ name: 'STICK', mountPoint: '', path: '', totalBytes: 64 * GB, availableBytes: 0, isRemovable: true, isReadOnly: false, isMounted: false, device: '/dev/sdb1' }] : [])],
-        list_recent_files: () => [],
+        list_recent_files: () => recent, clear_recent_file_history: () => { recent = []; return null },
         inspect_path: (a) => { const p = a.path.slice(0, a.path.lastIndexOf('/')), n = a.path.slice(p.length + 1); const r = (raw[p] ?? []).find((x) => x[0] === n) ?? [n, 'd', 0, now]
           return { name: n, path: a.path, entryType: r[1] === 'd' ? 'folder' : 'file', size: r[2], itemCount: 1, modified: r[3], created: r[3], preview: n.endsWith('.txt') ? 'hello' : null, previewTruncated: false, mediaPreview: null, mediaType: null, mode: 0o644, owner: 'dave', group: 'dave' } },
         set_permissions: () => null,

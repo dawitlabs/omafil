@@ -251,6 +251,11 @@
 .recycle-list__row { display: grid; grid-template-columns: 24px minmax(140px, 1fr) minmax(180px, 2fr) 140px; gap: 12px; align-items: center; min-height: 36px; padding: 0 8px; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 13px; }
 .recycle-list__row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.home-view__heading .home-view__retry {
+  margin-left: auto;
+  font-weight: 400;
+}
+
 .home-view__retry {
   height: 30px;
   padding: 0 12px;
