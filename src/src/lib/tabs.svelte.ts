@@ -101,6 +101,17 @@ class Tabs {
     this.activeIndex = Math.min(this.activeIndex, this.#tabs.length - 1)
   }
 
+  /**
+   * Refetches every pane in every tab. A setting that changes what a listing
+   * contains applies to all of them, not just the one in front.
+   */
+  reloadAll() {
+    for (const tab of this.#tabs) {
+      tab.reload()
+      tab.split?.reload()
+    }
+  }
+
   select(index: number) {
     if (index < 0 || index >= this.#tabs.length) return
 

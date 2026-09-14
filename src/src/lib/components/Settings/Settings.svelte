@@ -76,7 +76,7 @@
         checked={appState.settings.showHidden}
         onchange={(event) => {
           appState.setShowHidden(event.currentTarget.checked)
-          tabs.active.reload()
+          tabs.reloadAll()
         }}
       />
     </div>
@@ -106,7 +106,7 @@
         value={appState.settings.defaultSort}
         onchange={(event) => {
           appState.update({ defaultSort: event.currentTarget.value as SortKey })
-          tabs.active.reload()
+          tabs.reloadAll()
         }}
       >
         {#each sortKeys as key (key.value)}
@@ -126,7 +126,7 @@
         checked={appState.settings.defaultDescending}
         onchange={(event) => {
           appState.update({ defaultDescending: event.currentTarget.checked })
-          tabs.active.reload()
+          tabs.reloadAll()
         }}
       />
     </div>

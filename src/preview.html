@@ -3,8 +3,9 @@
   <head><meta charset="UTF-8" /><title>preview</title>
     <script>
       const GB = 1024 ** 3, HOME = '/home/dave', now = Math.floor(Date.now() / 1000)
-      const raw = { [HOME]: [['Documents', 'd', 0, now - 900]],
-        [`${HOME}/Documents`]: [['budget.xlsx', 'f', 1048576, now - 600], ['read.pdf', 'f', 15938417, now - 86400], ['notes.txt', 'f', 512, now - 300]] }
+      const raw = { [HOME]: [['Documents', 'd', 0, now - 900], ['.config', 'd', 0, now - 1200], ['.bashrc', 'f', 220, now - 1800]],
+        [`${HOME}/.config`]: [],
+        [`${HOME}/Documents`]: [['budget.xlsx', 'f', 1048576, now - 600], ['read.pdf', 'f', 15938417, now - 86400], ['notes.txt', 'f', 512, now - 300], ['.draft.txt', 'f', 64, now - 120]] }
       const params = new URLSearchParams(location.search)
       let stored = { pins: [], tags: [{ id: 'design', label: 'Design', color: '#f5342e' }, { id: 'dev', label: 'Dev', color: '#ffc72c' }],
         tagged: { [`${HOME}/Documents/budget.xlsx`]: ['design'], [`${HOME}/Documents/read.pdf`]: ['dev'], '/home/dave/Gone/missing.txt': ['design'] },
@@ -14,7 +15,7 @@
       let recent = [{ name: 'notes.txt', path: `${HOME}/Documents/notes.txt`, parentDirectory: `${HOME}/Documents` }, { name: 'shot.png', path: `${HOME}/Pictures/shot.png`, parentDirectory: `${HOME}/Pictures` }]
       const mock = {
         resolve_location: (a) => (a.location === 'home' ? HOME : `${HOME}/${a.location[0].toUpperCase()}${a.location.slice(1)}`),
-        list_directory: (a) => { const rows = [...(raw[a.path] ?? [])].sort((x, y) => ((y[1] === 'd') - (x[1] === 'd')) || x[0].localeCompare(y[0]))
+        list_directory: (a) => { const rows = [...(raw[a.path] ?? [])].filter((r) => a.showHidden || !r[0].startsWith('.')).sort((x, y) => ((y[1] === 'd') - (x[1] === 'd')) || x[0].localeCompare(y[0]))
           return { path: a.path, total: rows.length,
             crumbs: [HOME, ...a.path.slice(HOME.length).split('/').filter(Boolean).map((_, i, x) => `${HOME}/${x.slice(0, i + 1).join('/')}`)].map((p) => ({ name: p.split('/').filter(Boolean).at(-1), path: p })),
             entries: rows.map((r) => mk(a.path, r)) } },
@@ -23,7 +24,7 @@
         describe_path: (a) => { const p = a.path.slice(0, a.path.lastIndexOf('/')), n = a.path.slice(p.length + 1)
           const r = (raw[p] ?? []).find((x) => x[0] === n); if (!r) throw { message: 'gone' }; return mk(p, r) },
         search_files: () => ({ entries: [], truncated: false }),
-        list_subdirectories: (a) => (raw[a.path] ?? []).filter((r) => r[1] === 'd').map((r) => ({ name: r[0], path: `${a.path}/${r[0]}` })),
+        list_subdirectories: (a) => (raw[a.path] ?? []).filter((r) => r[1] === 'd' && (a.showHidden || !r[0].startsWith('.'))).map((r) => ({ name: r[0], path: `${a.path}/${r[0]}` })),
         watch_directories: () => null, unwatch_directory: () => null,
         load_state: () => stored, save_state: (a) => { stored = a.state; return null },
         open_path: () => null, new_directory: () => `${HOME}/x`, trash_paths: () => null, transfer_paths: () => null,
