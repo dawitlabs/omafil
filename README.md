@@ -18,6 +18,7 @@ A fast file manager for [Omarchy](https://omarchy.org). Tauri 2, Rust and Svelte
 
 - Tabs, search, pins, tags, recent files, recycle bin.
 - Cancellable copy, move and ZIP operations with byte progress and staged publication (a cancelled copy never leaves half a file).
+- Extract ZIP, tar, gz, bz2, xz, zst, lz4, 7z, iso, cab and rar.
 - Split view: two panes on one folder, F6 switches, drag between them.
 - Open with any installed app for the file's type, default first; make any of them the default.
 - Permissions editing in Properties.
@@ -25,6 +26,12 @@ A fast file manager for [Omarchy](https://omarchy.org). Tauri 2, Rust and Svelte
 - Removable drives mount, unmount and eject through `udisksctl`; plugging in a stick refreshes the list.
 - Drag and drop inside the app and from other apps; image, text and PDF previews (`pdftoppm`, cached under `~/.cache/omafil`).
 - Panics and unhandled frontend errors land as JSON lines in `~/.local/state/omafil/errors.log`.
+
+## Undo
+
+`Ctrl+Z` reverses the last operation: a move goes back where it came from, a copy
+is trashed, a rename reverts, a new folder is removed, and trashed items come
+back out of the recycle bin. The last 50 operations are kept.
 
 ## Develop
 
