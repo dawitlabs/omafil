@@ -13,6 +13,7 @@ mod operation_queue;
 mod operation_io;
 mod paths;
 mod preview;
+mod clipboard;
 mod recent;
 mod recycle;
 mod search;
@@ -169,6 +170,18 @@ async fn transfer_paths(
     is_move: bool,
     conflict_policy: TransferConflictPolicy,
 ) -> Result<Vec<TransferResult>, DirectoryError> {
+#[tauri::command]
+async fn read_file_clipboard() -> Option<(Vec<String>, bool)> {
+    tauri::async_runtime::spawn_blocking(clipboard::read_file_clipboard).await.ok().flatten()
+}
+
+#[tauri::command]
+async fn write_file_clipboard(paths: Vec<String>, is_cut: bool) -> Result<(), DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || clipboard::write_file_clipboard(&paths, is_cut))
+        .await
+        .map_err(|_| DirectoryError::detail("The clipboard could not be written."))?
+}
+
     tauri::async_runtime::spawn_blocking(move || {
         transfer_entries(paths, destination_path, is_move, conflict_policy)
     })
@@ -414,6 +427,8 @@ async fn clear_recent_file_history() -> Result<(), RecentFilesError> {
             inspect_path,
             set_permissions,
             describe_path,
+            read_file_clipboard,
+            write_file_clipboard,
             search_files,
             watch_directories,
             unwatch_directory,

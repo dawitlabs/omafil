@@ -218,25 +218,6 @@
       return
     }
 
-    if (event.ctrlKey || event.metaKey) {
-      const shortcuts: Record<string, () => void> = {
-        a: () => fileOperations.selectAll(),
-        c: () => fileOperations.copySelection(),
-        x: () => fileOperations.cutSelection(),
-        v: () => void fileOperations.paste(),
-        '1': () => fileOperations.viewMode = 'details',
-        '2': () => fileOperations.viewMode = 'icons',
-        '3': () => fileOperations.viewMode = 'preview',
-      }
-      const shortcut = shortcuts[event.key.toLowerCase()]
-
-      if (shortcut) {
-        event.preventDefault()
-        shortcut()
-      }
-      return
-    }
-
     const moves: Record<string, number> = {
       ArrowDown: activeIndex + 1,
       ArrowUp: activeIndex - 1,
@@ -311,7 +292,35 @@
     }
   }
 
+  /// The clipboard shortcuts live on the window because the folder list is not always
+  /// the focused element, and a text field has first claim on them when it is.
+  function isTypingInto(target: EventTarget | null): boolean {
+    return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA'].includes(target.tagName))
+  }
+
   function handleWindowKeydown(event: KeyboardEvent) {
+    // Split view mounts one of these per pane, so only the focused pane may act on a window key.
+    if (tabs.active !== navigation) return
+
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && !isTypingInto(event.target) && !fileOperations.renamingPath) {
+      const shortcuts: Record<string, () => void> = {
+        a: () => fileOperations.selectAll(),
+        c: () => fileOperations.copySelection(),
+        x: () => fileOperations.cutSelection(),
+        v: () => void fileOperations.paste(),
+        '1': () => (fileOperations.viewMode = 'details'),
+        '2': () => (fileOperations.viewMode = 'icons'),
+        '3': () => (fileOperations.viewMode = 'preview'),
+      }
+      const shortcut = shortcuts[event.key.toLowerCase()]
+
+      if (shortcut) {
+        event.preventDefault()
+        shortcut()
+        return
+      }
+    }
+
     if (!event.altKey) return
 
     if (event.key === 'ArrowLeft') navigation.back()
@@ -320,7 +329,7 @@
   }
 </script>
 
-<svelte:window onkeydown={handleWindowKeydown} />
+<svelte:window onkeydown={handleWindowKeydown} onfocus={() => tabs.active === navigation && void fileOperations.syncFromDesktopClipboard()} />
 
 <CommandBar />
 

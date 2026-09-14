@@ -121,30 +121,40 @@ class FileOperations {
     this.#setSelection(paths)
   }
 
-  copySelection() {
-    if (this.selectedPaths.length === 0) return
+  #setClipboard(paths: string[], mode: ClipboardMode) {
+    if (paths.length === 0) return
 
-    this.clipboardPaths = this.selectedPaths
-    this.clipboardMode = 'copy'
+    this.clipboardPaths = paths
+    this.clipboardMode = mode
+    void invoke('write_file_clipboard', { paths, isCut: mode === 'cut' }).catch(() => {})
+  }
+
+  /** Picks up files copied in another file manager, so Ctrl+V works across apps. */
+  async syncFromDesktopClipboard() {
+    const clipboard = await invoke<[string[], boolean] | null>('read_file_clipboard').catch(() => null)
+    if (!clipboard) return
+
+    const [paths, isCut] = clipboard
+    if (paths.join('\n') === this.clipboardPaths.join('\n')) return
+
+    this.clipboardPaths = paths
+    this.clipboardMode = isCut ? 'cut' : 'copy'
+  }
+
+  copySelection() {
+    this.#setClipboard(this.selectedPaths, 'copy')
   }
 
   copyPaths(paths: string[]) {
-    if (paths.length === 0) return
-    this.clipboardPaths = paths
-    this.clipboardMode = 'copy'
+    this.#setClipboard(paths, 'copy')
   }
 
   cutPaths(paths: string[]) {
-    if (paths.length === 0) return
-    this.clipboardPaths = paths
-    this.clipboardMode = 'cut'
+    this.#setClipboard(paths, 'cut')
   }
 
   cutSelection() {
-    if (this.selectedPaths.length === 0) return
-
-    this.clipboardPaths = this.selectedPaths
-    this.clipboardMode = 'cut'
+    this.#setClipboard(this.selectedPaths, 'cut')
   }
 
   showBulkRename(paths: string[] = this.selectedPaths) {
@@ -368,6 +378,7 @@ class FileOperations {
   }
 
   async paste() {
+    await this.syncFromDesktopClipboard()
     if (!this.canPaste) return
 
     await this.beginTransfer(this.clipboardPaths, this.directoryPath, this.clipboardMode === 'cut')
