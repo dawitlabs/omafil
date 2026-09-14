@@ -7,11 +7,9 @@
   import DismissIcon from '@fluentui/svg-icons/icons/dismiss_20_regular.svg?no-inline'
   import FolderIcon from '@fluentui/svg-icons/icons/folder_20_regular.svg?no-inline'
   import HomeIcon from '@fluentui/svg-icons/icons/home_20_regular.svg?no-inline'
-  import MinimizeIcon from '@fluentui/svg-icons/icons/subtract_20_regular.svg?no-inline'
   import SearchIcon from '@fluentui/svg-icons/icons/search_20_regular.svg?no-inline'
   import SettingsIcon from '@fluentui/svg-icons/icons/settings_20_regular.svg?no-inline'
   import SplitIcon from '@fluentui/svg-icons/icons/layout_column_two_20_regular.svg?no-inline'
-  import MaximizeIcon from '@fluentui/svg-icons/icons/square_20_regular.svg?no-inline'
   import { getCurrentWindow } from '@tauri-apps/api/window'
   import { tabs } from '../../tabs.svelte'
   import { appState } from '../../appState.svelte'
@@ -91,19 +89,6 @@
     }
   }
 
-  async function minimizeWindow() {
-    await appWindow.minimize()
-  }
-
-  async function toggleMaximize() {
-    if (await appWindow.isMaximized()) {
-      await appWindow.unmaximize()
-      return
-    }
-
-    await appWindow.maximize()
-  }
-
   async function closeWindow() {
     await appWindow.close()
   }
@@ -158,12 +143,6 @@
     </button>
 
     <div class="app-header__window-controls" aria-label="Window controls">
-      <button class="app-header__window-button" type="button" aria-label="Minimize" onclick={minimizeWindow}>
-        <span class="masked-icon app-header__icon" style="--icon: url({MinimizeIcon})" aria-hidden="true"></span>
-      </button>
-      <button class="app-header__window-button" type="button" aria-label="Maximize" onclick={toggleMaximize}>
-        <span class="masked-icon app-header__icon" style="--icon: url({MaximizeIcon})" aria-hidden="true"></span>
-      </button>
       <button class="app-header__window-button app-header__window-button--close" type="button" aria-label="Close" onclick={closeWindow}>
         <span class="masked-icon app-header__icon" style="--icon: url({DismissIcon})" aria-hidden="true"></span>
       </button>
