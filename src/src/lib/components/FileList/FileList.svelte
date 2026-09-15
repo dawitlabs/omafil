@@ -189,6 +189,13 @@
     if (entry) fileOperations.selectOnly(entry.path)
   }
 
+  // Ctrl and Meta chords are the window handler's shortcuts. Without this guard
+  // Ctrl+X jumps the selection to the next name starting with "x" and cuts that
+  // instead of what was selected.
+  function isTypeAheadKey(event: KeyboardEvent) {
+    return event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey
+  }
+
   function selectByTyping(character: string) {
     const lowerCharacter = character.toLocaleLowerCase()
     typeAhead = typeAhead === lowerCharacter ? lowerCharacter : `${typeAhead}${lowerCharacter}`
@@ -266,7 +273,7 @@
     else if (event.shiftKey && event.key === 'Delete') fileOperations.requestPermanentDelete()
     else if (event.key === 'Delete') void fileOperations.deleteSelection()
     else if (event.key === 'Escape') fileOperations.clearSelection()
-    else if (event.key.length === 1 && !event.altKey && !appState.settings.vimKeys) {
+    else if (isTypeAheadKey(event) && !appState.settings.vimKeys) {
       event.preventDefault()
       selectByTyping(event.key)
     }
