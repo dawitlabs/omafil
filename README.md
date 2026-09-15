@@ -51,13 +51,14 @@ PLAYWRIGHT_DIR=<a node_modules holding playwright> node src/tests/e2e.mjs
 
 ## Install
 
-Omarchy and other Arch systems, once the package is on the AUR:
+Arch and other Arch-based systems, from the AUR:
 
 ```sh
-omarchy pkg aur add omafil-git   # or: yay -S omafil-git
+yay -S omafil-git          # or: paru -S omafil-git
+omarchy pkg aur add omafil-git   # on Omarchy
 ```
 
-Until then, build the package from this repo. It installs the binary, the
+Or build the package from this repo. It installs the binary, the
 desktop entry and the icons system-wide, so omafil appears in the launcher:
 
 ```sh
