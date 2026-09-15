@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2 — 2026-09-15
+
+### Fixed
+
+- Clicks landed in the wrong place on a fractionally scaled display: WebKitGTK reported pointer coordinates against a viewport far wider than the window, so a click aimed at the settings gear arrived a couple of hundred pixels to its left and nothing responded. omafil now runs under XWayland, which does not have the fault, and takes the display scale from the compositor so everything still draws at the size the rest of the desktop uses.
+- A narrow window put the right-hand commands outside it. The command bar wraps instead of scrolling with its scrollbar hidden, the Type and Date columns give way as the window narrows, and the search field yields before the header overflows.
+- The breadcrumb disappeared below about 700px, because the search field was sized first and left it no width. Crumbs also shrank to their own padding; they keep their width now and the trail scrolls, held at the end so the folder you are in is the one on show.
+- A context menu near the bottom of the window ran off the edge, and a long one had no way to reach its last entries. It stays inside the window and scrolls when it has to.
+- Emptying the Recycle Bin asked through the webview's own confirm() box, which ignored the theme. It uses the same dialog the rest of the app does, and those dialogs now sit centred rather than against the left edge.
+- `omafil-bin` no longer builds an empty debug package alongside itself.
+
 ## 0.2.1 — 2026-09-15
 
 ### Added
