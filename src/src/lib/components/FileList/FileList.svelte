@@ -21,8 +21,6 @@
   let band = $state<Band | null>(null)
   let menu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null)
   let bandOrigin: { x: number; y: number } | null = null
-  let typeAhead = ''
-  let typeAheadTimer: ReturnType<typeof setTimeout> | null = null
 
   const entries = $derived(navigation.entries)
   const hiddenCount = $derived(navigation.hiddenCount)
@@ -53,6 +51,14 @@
     row?.focus()
     row?.scrollIntoView({ block: 'nearest' })
   }
+
+  // Filtering replaces every row, so the list is left with nothing focused and
+  // Enter has no entry to open. Selecting the top match hands the keyboard back.
+  $effect(() => {
+    const [first] = navigation.filter ? entries : []
+
+    if (first) moveSelection(0)
+  })
 
   function activateRow(entry: DirectoryEntry, index: number, event: MouseEvent) {
     activeIndex = index
@@ -189,20 +195,32 @@
     if (entry) fileOperations.selectOnly(entry.path)
   }
 
-  function selectByTyping(character: string) {
-    const lowerCharacter = character.toLocaleLowerCase()
-    typeAhead = typeAhead === lowerCharacter ? lowerCharacter : `${typeAhead}${lowerCharacter}`
+  // Ctrl and Meta chords are the window handler's own shortcuts. Without this
+  // guard Ctrl+X would append "x" to the filter and cut against a narrowed list.
+  function isFilterKey(event: KeyboardEvent) {
+    return event.key.length === 1 && !event.altKey && !event.ctrlKey && !event.metaKey
+  }
 
-    if (typeAheadTimer) clearTimeout(typeAheadTimer)
-    typeAheadTimer = setTimeout(() => {
-      typeAhead = ''
-      typeAheadTimer = null
-    }, 900)
+  /// Every filtered keystroke replaces the rows, so the focused row stops
+  /// existing and the list's own handler would never see the second character.
+  /// Filtering therefore reads keys at the window, like Nautilus does.
+  function handleFilterKeydown(event: KeyboardEvent): boolean {
+    if (appState.settings.vimKeys || fileOperations.renamingPath || isTypingInto(event.target)) return false
 
-    const ordered = [...entries.slice(activeIndex + 1), ...entries.slice(0, activeIndex + 1)]
-    const match = ordered.find((candidate) => candidate.name.toLocaleLowerCase().startsWith(typeAhead))
+    if (navigation.filter && event.key === 'Escape') {
+      navigation.clearFilter()
+      return true
+    }
 
-    if (match) moveSelection(entries.indexOf(match))
+    if (navigation.filter && event.key === 'Backspace') {
+      navigation.filterBy(navigation.filter.slice(0, -1))
+      return true
+    }
+
+    if (!isFilterKey(event)) return false
+
+    navigation.filterBy(`${navigation.filter}${event.key}`)
+    return true
   }
 
   let isAwaitingG = false
@@ -255,6 +273,7 @@
       navigation.reload()
     }
     else if (event.key === 'Backspace') {
+      if (navigation.filter) return
       event.preventDefault()
       navigation.up()
     }
@@ -265,10 +284,9 @@
     else if (event.key === 'F6') tabs.focusOtherPane()
     else if (event.shiftKey && event.key === 'Delete') fileOperations.requestPermanentDelete()
     else if (event.key === 'Delete') void fileOperations.deleteSelection()
-    else if (event.key === 'Escape') fileOperations.clearSelection()
-    else if (event.key.length === 1 && !event.altKey && !appState.settings.vimKeys) {
-      event.preventDefault()
-      selectByTyping(event.key)
+    else if (event.key === 'Escape') {
+      if (navigation.filter) return
+      fileOperations.clearSelection()
     }
   }
 
@@ -302,6 +320,11 @@
   function handleWindowKeydown(event: KeyboardEvent) {
     // Split view mounts one of these per pane, so only the focused pane may act on a window key.
     if (tabs.active !== navigation) return
+
+    if (!event.ctrlKey && !event.metaKey && handleFilterKeydown(event)) {
+      event.preventDefault()
+      return
+    }
 
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && !isTypingInto(event.target) && !fileOperations.renamingPath) {
       const shortcuts: Record<string, () => void> = {
@@ -346,6 +369,14 @@
   <p class="file-list__notice">
     {formatCount(navigation.missingTagged)}
     tagged {navigation.missingTagged === 1 ? 'item is' : 'items are'} not reachable right now, so they are not listed.
+  </p>
+{/if}
+
+{#if navigation.filter}
+  <p class="file-list__filter" role="status" aria-live="polite">
+    <span class="file-list__filter-query">{navigation.filter}</span>
+    <span class="file-list__filter-count">{formatCount(navigation.total)} matching</span>
+    <span class="file-list__filter-hint">Esc to clear</span>
   </p>
 {/if}
 
@@ -426,7 +457,9 @@
   {/each}
 
   {#if entries.length === 0}
-    <p class="file-list__empty">This folder is empty.</p>
+    <p class="file-list__empty">
+      {navigation.filter ? `Nothing here matches “${navigation.filter}”.` : 'This folder is empty.'}
+    </p>
   {/if}
 
   {#if band}

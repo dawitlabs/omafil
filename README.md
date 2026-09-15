@@ -5,7 +5,7 @@
 A fast file manager for [Omarchy](https://omarchy.org). Tauri 2, Rust and Svelte 5.
 
 ```sh
-yay -S omafil-git
+yay -S omafil-bin
 ```
 
 ## What makes it Omarchy's
@@ -21,6 +21,7 @@ yay -S omafil-git
 ## Files
 
 - Tabs, search, pins, tags, recent files, recycle bin.
+- Type in a folder to filter it: the list narrows to names containing what you typed, Backspace edits, Esc restores. Off while vim keys are on.
 - Cancellable copy, move and ZIP operations with byte progress and staged publication (a cancelled copy never leaves half a file).
 - Extract ZIP, tar, gz, bz2, xz, zst, lz4, 7z, iso, cab and rar.
 - Split view: two panes on one folder, F6 switches, drag between them.
@@ -58,8 +59,9 @@ PLAYWRIGHT_DIR=<a node_modules holding playwright> node src/tests/e2e.mjs
 Arch and other Arch-based systems, from the AUR:
 
 ```sh
-yay -S omafil-git          # or: paru -S omafil-git
-omarchy pkg aur add omafil-git   # on Omarchy
+yay -S omafil-bin          # prebuilt, installs in seconds
+yay -S omafil-git          # builds from source, takes several minutes
+omarchy pkg aur add omafil-bin   # on Omarchy
 ```
 
 Or build the package from this repo. It installs the binary, the

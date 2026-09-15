@@ -26,6 +26,9 @@ export type DirectoryListing = {
 }
 
 const DIRECTORY_PAGE_SIZE = 300
+// Short enough that the list keeps up with typing, long enough that a fast
+// typist does not spend a directory read per keystroke.
+const FILTER_DEBOUNCE_MS = 120
 
 const descendingByDefault: EntrySort[] = ['size', 'modified']
 
@@ -82,6 +85,8 @@ export class Navigation {
   isLoading = $state(false)
   isLoadingMore = $state(false)
   error = $state<string | null>(null)
+  #filter = $state('')
+  #filterTimer: ReturnType<typeof setTimeout> | null = null
   #sort = $state<EntrySort | null>(null)
   #descending = $state<boolean | null>(null)
 
@@ -252,6 +257,7 @@ export class Navigation {
   back() {
     if (!this.canGoBack) return
 
+    this.#dropFilter()
     this.#index -= 1
     void this.#load()
   }
@@ -259,6 +265,7 @@ export class Navigation {
   forward() {
     if (!this.canGoForward) return
 
+    this.#dropFilter()
     this.#index += 1
     void this.#load()
   }
@@ -271,6 +278,42 @@ export class Navigation {
 
   reload() {
     void this.#load()
+  }
+
+  /// Type-ahead filtering lives beside the view rather than in it: it never
+  /// pushes history, so walking back does not replay someone's keystrokes.
+  get filter(): string {
+    return this.#filter
+  }
+
+  filterBy(filter: string) {
+    if (this.#filter === filter) return
+
+    this.#filter = filter
+
+    if (this.#filterTimer) clearTimeout(this.#filterTimer)
+    this.#filterTimer = setTimeout(() => {
+      this.#filterTimer = null
+      void this.#load()
+    }, FILTER_DEBOUNCE_MS)
+  }
+
+  clearFilter() {
+    if (!this.#dropFilter()) return
+
+    void this.#load()
+  }
+
+  /// Returns whether a filter was actually in effect, so callers know if the
+  /// listing they are showing is now stale.
+  #dropFilter(): boolean {
+    if (this.#filterTimer) clearTimeout(this.#filterTimer)
+    this.#filterTimer = null
+
+    const wasFiltered = this.#filter !== ''
+    this.#filter = ''
+
+    return wasFiltered
   }
 
   loadMore() {
@@ -287,6 +330,8 @@ export class Navigation {
 
   #push(view: View) {
     if (view.kind === 'folder' && this.isCurrentPath(view.path)) return
+
+    this.#dropFilter()
 
     const current = this.view
 
@@ -325,6 +370,7 @@ export class Navigation {
           showHidden: appState.settings.showHidden,
           offset: 0,
           limit: DIRECTORY_PAGE_SIZE,
+          filter: this.#filter,
         })
 
         if (requestId === this.#requestSequence) {
@@ -387,6 +433,7 @@ export class Navigation {
         showHidden: appState.settings.showHidden,
         offset: current.entries.length,
         limit: DIRECTORY_PAGE_SIZE,
+        filter: this.#filter,
       })
 
       if (requestId === this.#requestSequence && this.listing?.path === current.path) {

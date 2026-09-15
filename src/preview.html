@@ -18,7 +18,7 @@
       let recent = [{ name: 'notes.txt', path: `${HOME}/Documents/notes.txt`, parentDirectory: `${HOME}/Documents` }, { name: 'shot.png', path: `${HOME}/Pictures/shot.png`, parentDirectory: `${HOME}/Pictures` }]
       const mock = {
         resolve_location: (a) => (a.location === 'home' ? HOME : `${HOME}/${a.location[0].toUpperCase()}${a.location.slice(1)}`),
-        list_directory: (a) => { const rows = [...(raw[a.path] ?? [])].filter((r) => a.showHidden || !r[0].startsWith('.')).sort((x, y) => ((y[1] === 'd') - (x[1] === 'd')) || x[0].localeCompare(y[0]))
+        list_directory: (a) => { const rows = [...(raw[a.path] ?? [])].filter((r) => (a.showHidden || !r[0].startsWith('.')) && (!a.filter || r[0].toLowerCase().includes(a.filter.toLowerCase()))).sort((x, y) => ((y[1] === 'd') - (x[1] === 'd')) || x[0].localeCompare(y[0]))
           return { path: a.path, total: rows.length,
             crumbs: [HOME, ...a.path.slice(HOME.length).split('/').filter(Boolean).map((_, i, x) => `${HOME}/${x.slice(0, i + 1).join('/')}`)].map((p) => ({ name: p.split('/').filter(Boolean).at(-1), path: p })),
             entries: rows.map((r) => mk(a.path, r)) } },

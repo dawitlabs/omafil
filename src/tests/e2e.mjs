@@ -81,6 +81,63 @@ await scenario('show hidden files', async ({ page, rows, openDocuments }) => {
   check('the dotfile appears', await rows(), ['.draft.txt', 'budget.xlsx', 'notes.txt', 'read.pdf'])
 })
 
+await scenario('type to filter the folder', async ({ page, rows, openDocuments }) => {
+  await openDocuments()
+  check('the folder starts unfiltered', await rows(), ['budget.xlsx', 'notes.txt', 'read.pdf'])
+
+  // "ote" sits inside notes.txt without starting it, so a prefix match would miss it.
+  await page.keyboard.type('ote')
+  await page.waitForTimeout(500)
+  check('typing narrows to the substring match', await rows(), ['notes.txt'])
+  check('the filter is visible', await page.locator('.file-list__filter-query').innerText(), 'ote')
+
+  check('the top match is selected', await page.locator('[data-path][aria-selected="true"]').count(), 1)
+
+  // The point of selecting it: Enter opens the match without touching the mouse.
+  await page.keyboard.press('Backspace')
+  await page.keyboard.press('Backspace')
+  await page.waitForTimeout(500)
+  check('backspace widens the filter', await page.locator('.file-list__filter-query').innerText(), 'o')
+
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(500)
+  check('escape restores the folder', await rows(), ['budget.xlsx', 'notes.txt', 'read.pdf'])
+  check('the filter bar goes away', await page.locator('.file-list__filter').count(), 0)
+})
+
+await scenario('enter opens the filtered match', async ({ page, rows }) => {
+  // The Home landing view mounts no file list, so this starts in the home folder.
+  await page.locator('.file-sidebar__item', { hasText: 'dave' }).first().click()
+  await page.waitForTimeout(700)
+
+  await page.keyboard.type('doc')
+  await page.waitForTimeout(500)
+  check('the folder narrows to the match', await rows(), ['Documents'])
+
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(700)
+  check('enter walked into it', await rows(), ['budget.xlsx', 'notes.txt', 'read.pdf'])
+  check('and the filter did not follow', await page.locator('.file-list__filter').count(), 0)
+})
+
+await scenario('a filter that matches nothing', async ({ page, rows, openDocuments }) => {
+  await openDocuments()
+  await page.keyboard.type('zz')
+  await page.waitForTimeout(500)
+
+  check('no rows survive', await rows(), [])
+  check('the empty state names the filter', await page.locator('.file-list__empty').innerText(), 'Nothing here matches \u201Czz\u201D.')
+
+  // The rows are gone, so nothing in the list holds focus — keys must still land.
+  await page.keyboard.press('Backspace')
+  await page.waitForTimeout(500)
+  check('a keystroke lands with an empty list', await page.locator('.file-list__filter-query').innerText(), 'z')
+
+  await page.keyboard.press('Backspace')
+  await page.waitForTimeout(500)
+  check('emptying the filter restores the folder', await rows(), ['budget.xlsx', 'notes.txt', 'read.pdf'])
+})
+
 await scenario('sidebar folder tree', async ({ page }) => {
   await page.getByRole('button', { name: 'Expand dave' }).first().click()
   await page.waitForTimeout(600)

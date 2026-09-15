@@ -326,3 +326,31 @@
 .file-archive-dialog__field { display: grid; gap: 7px; margin: 18px 0; color: var(--text-primary); font-size: 13px; font-weight: 600; }
 .file-archive-dialog__field input { height: 34px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 4px; outline: 0; color: var(--text-primary); background: var(--surface-input); font: inherit; font-weight: 400; }
 .file-archive-dialog__field input:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+.file-list__filter {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-notice);
+  border-radius: 4px;
+  background: var(--surface-notice);
+  font-size: 12px;
+}
+
+.file-list__filter-query {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-list__filter-count,
+.file-list__filter-hint {
+  flex: none;
+  color: var(--text-muted);
+}
