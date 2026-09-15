@@ -12,6 +12,9 @@ depends=('webkit2gtk-4.1' 'gtk3' 'poppler' 'udisks2' 'xdg-utils' 'libnotify'
          'libarchive' 'glib2' 'wl-clipboard')
 optdepends=('omarchy: theme and editor integration')
 provides=('omafil')
+# The released binary is already stripped, so makepkg would only generate a
+# debug package out of nothing and strip a stripped file.
+options=('!debug' '!strip')
 conflicts=('omafil' 'omafil-git')
 source=("omafil-${pkgver}-x86_64.tar.gz::${url}/releases/download/v${pkgver}/omafil-${pkgver}-x86_64.tar.gz")
 sha256sums=('@SHA256@')
