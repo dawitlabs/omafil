@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.4 — 2026-09-15
+
+### Fixed
+
+- The display scale correction only ran when the webview drew smaller than the rest of the desktop. A session that sets `GDK_SCALE` higher than the monitor's own scale makes it draw larger instead, and that direction was ignored, so everything came out oversized.
+
 ## 0.2.3 — 2026-09-15
 
 ### Added
