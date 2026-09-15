@@ -203,6 +203,29 @@ await scenario('a narrow window keeps every command reachable', async ({ page, o
   check('the current folder is the crumb on show', trail.lastVisible, true)
 })
 
+await scenario('the sidebar collapses to a rail', async ({ page, openDocuments }) => {
+  await openDocuments()
+  const shell = page.locator('.app-shell')
+  const railWidth = async () => Math.round((await page.locator('.file-sidebar').boundingBox()).width)
+
+  check('it starts open', await shell.getAttribute('data-sidebar'), 'open')
+  const open = await railWidth()
+
+  await page.getByRole('button', { name: 'Collapse the sidebar' }).click()
+  await page.waitForTimeout(300)
+  check('collapsing narrows it', await railWidth() < open / 2, true)
+  check('the shell knows', await shell.getAttribute('data-sidebar'), 'collapsed')
+
+  // The labels go visually but keep naming their buttons.
+  check('Documents is still reachable by name', await page.getByRole('button', { name: 'Documents' }).count() > 0, true)
+  const label = page.locator('.file-sidebar__item', { hasText: 'Documents' }).first()
+  check('but its label is not on show', Math.round((await label.boundingBox()).width) < 60, true)
+
+  await page.getByRole('button', { name: 'Expand the sidebar' }).click()
+  await page.waitForTimeout(300)
+  check('expanding restores it', await railWidth(), open)
+})
+
 await scenario('sidebar folder tree', async ({ page }) => {
   await page.getByRole('button', { name: 'Expand dave' }).first().click()
   await page.waitForTimeout(600)

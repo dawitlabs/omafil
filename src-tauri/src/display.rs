@@ -5,13 +5,31 @@ use std::{
     path::PathBuf,
 };
 
+/// Omarchy exports `GDK_BACKEND=wayland,x11,*` for the whole session, so the
+/// variable merely being set says nothing about what this app should use. Only
+/// a value that names no Wayland backend is somebody's actual choice.
+fn prefers_wayland(backend: Option<&str>) -> bool {
+    match backend {
+        Some(value) => value.contains("wayland") || value.contains('*'),
+        None => true,
+    }
+}
+
 /// WebKitGTK delivers pointer events at the wrong coordinates under fractional
 /// Wayland scaling: a click lands hundreds of CSS pixels from where it was
 /// aimed, which leaves most of the window unusable. XWayland scales by whole
-/// numbers and does not have the fault, so it is the default on Wayland until
-/// the GTK side is fixed. Setting GDK_BACKEND yourself still wins.
+/// numbers and does not have the fault, so it is what omafil asks for until the
+/// GTK side is fixed. Set `OMAFIL_BACKEND=wayland` to overrule that.
 pub(crate) fn prefer_xwayland() {
-    if env::var_os("GDK_BACKEND").is_none() && env::var_os("WAYLAND_DISPLAY").is_some() {
+    if env::var_os("WAYLAND_DISPLAY").is_none() {
+        return;
+    }
+    if env::var("OMAFIL_BACKEND").is_ok_and(|backend| backend == "wayland") {
+        return;
+    }
+
+    let backend = env::var("GDK_BACKEND").ok();
+    if prefers_wayland(backend.as_deref()) {
         env::set_var("GDK_BACKEND", "x11");
     }
 }
@@ -58,7 +76,21 @@ pub(crate) fn compositor_scale() -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_focused_scale;
+    use super::{parse_focused_scale, prefers_wayland};
+
+    #[test]
+    fn a_session_default_is_not_a_choice_of_wayland() {
+        // What Omarchy exports for every app in the session.
+        assert!(prefers_wayland(Some("wayland,x11,*")));
+        assert!(prefers_wayland(Some("wayland")));
+        assert!(prefers_wayland(None));
+    }
+
+    #[test]
+    fn naming_no_wayland_backend_is_left_alone() {
+        assert!(!prefers_wayland(Some("x11")));
+        assert!(!prefers_wayland(Some("broadway")));
+    }
 
     #[test]
     fn reads_the_focused_monitors_scale() {

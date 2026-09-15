@@ -89,7 +89,7 @@
   })
 </script>
 
-<div class="app-shell">
+<div class="app-shell" data-sidebar={appState.settings.sidebarCollapsed ? 'collapsed' : 'open'}>
   <Header />
   <Sidebar />
 

@@ -21,6 +21,7 @@ export type Settings = {
   defaultSort: SortKey
   defaultDescending: boolean
   vimKeys: boolean
+  sidebarCollapsed: boolean
 }
 
 const defaultSettings: Settings = {
@@ -29,6 +30,7 @@ const defaultSettings: Settings = {
   defaultSort: 'name',
   defaultDescending: false,
   vimKeys: false,
+  sidebarCollapsed: false,
 }
 
 type StoredState = {

@@ -16,6 +16,7 @@
   import UsbStickIcon from '@fluentui/svg-icons/icons/usb_stick_20_regular.svg?no-inline'
   import VideoIcon from '@fluentui/svg-icons/icons/video_20_regular.svg?no-inline'
   import DeleteIcon from '@fluentui/svg-icons/icons/delete_20_regular.svg?no-inline'
+import ChevronLeftIcon from '@fluentui/svg-icons/icons/chevron_left_20_regular.svg?no-inline'
 import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular.svg?no-inline'
   import ContextMenu from '../ContextMenu/ContextMenu.svelte'
   import FolderTree from './FolderTree.svelte'
@@ -26,6 +27,8 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
   import { knownLocations } from '../../navigation.svelte'
   import type { DriveInfo, KnownLocation } from '../../navigation.svelte'
   import { tabs } from '../../tabs.svelte'
+
+  const isCollapsed = $derived(appState.settings.sidebarCollapsed)
 
   type LocationItem = {
     location: KnownLocation
@@ -107,14 +110,32 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
 <aside class="file-sidebar" aria-label="File navigation">
   <div class="file-sidebar__brand">
     <span class="masked-icon file-sidebar__icon" style="--icon: url({FolderFilledIcon})" aria-hidden="true"></span>
-    <span>omafiles</span>
+    <span class="file-sidebar__label">omafiles</span>
+    <button
+      class="file-sidebar__collapse"
+      type="button"
+      aria-expanded={!appState.settings.sidebarCollapsed}
+      aria-controls="sidebar-contents"
+      aria-label={isCollapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
+      title={isCollapsed ? 'Expand the sidebar' : 'Collapse the sidebar'}
+      onclick={() => appState.update({ sidebarCollapsed: !isCollapsed })}
+    >
+      <span
+        class="masked-icon file-sidebar__icon"
+        style="--icon: url({isCollapsed ? ChevronRightIcon : ChevronLeftIcon})"
+        aria-hidden="true"
+      ></span>
+    </button>
   </div>
+
+  <div id="sidebar-contents" class="file-sidebar__contents">
 
   <nav class="file-sidebar__primary-nav" aria-label="Primary navigation">
     <button
       class="file-sidebar__item"
       class:file-sidebar__item--active={active.view.kind === 'home'}
       type="button"
+      title="Home"
       aria-current={active.view.kind === 'home' ? 'page' : undefined}
       onclick={() => active.goHome()}
     >
@@ -133,6 +154,7 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
         <button
           class="file-sidebar__item"
           class:file-sidebar__item--active={active.isCurrentPath(pin.path)}
+          title={pin.label}
           type="button"
           aria-current={active.isCurrentPath(pin.path) ? 'page' : undefined}
           onclick={() => active.open(pin.path)}
@@ -148,7 +170,7 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
   </section>
 
   <nav class="file-sidebar__primary-nav" aria-label="Recovery">
-    <button class="file-sidebar__item" class:file-sidebar__item--active={active.view.kind === 'recycle'} type="button" aria-current={active.view.kind === 'recycle' ? 'page' : undefined} onclick={() => active.openRecycleBin()}>
+    <button class="file-sidebar__item" class:file-sidebar__item--active={active.view.kind === 'recycle'} type="button" title="Recycle Bin" aria-current={active.view.kind === 'recycle' ? 'page' : undefined} onclick={() => active.openRecycleBin()}>
       <span class="masked-icon file-sidebar__icon" style="--icon: url({DeleteIcon})" aria-hidden="true"></span>
       <span>Recycle Bin</span>
     </button>
@@ -165,6 +187,7 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
           class="file-sidebar__item"
           class:file-sidebar__item--active={isLocationActive(item.location)}
           type="button"
+          title={item.label}
           aria-current={isLocationActive(item.location) ? 'page' : undefined}
           onclick={() => active.openLocation(item.location)}
           oncontextmenu={(event) => { const path = locationPaths[item.location]; if (path) openMenu(event, folderMenuItems(path)) }}
@@ -278,6 +301,7 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
       {/if}
     </nav>
   </section>
+  </div>
 </aside>
 
 {#if menu}
