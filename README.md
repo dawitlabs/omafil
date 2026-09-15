@@ -5,7 +5,7 @@
 A fast file manager for [Omarchy](https://omarchy.org). Tauri 2, Rust and Svelte 5.
 
 ```sh
-yay -S omafil-git
+yay -S omafil-bin
 ```
 
 ## What makes it Omarchy's
@@ -58,8 +58,9 @@ PLAYWRIGHT_DIR=<a node_modules holding playwright> node src/tests/e2e.mjs
 Arch and other Arch-based systems, from the AUR:
 
 ```sh
-yay -S omafil-git          # or: paru -S omafil-git
-omarchy pkg aur add omafil-git   # on Omarchy
+yay -S omafil-bin          # prebuilt, installs in seconds
+yay -S omafil-git          # builds from source, takes several minutes
+omarchy pkg aur add omafil-bin   # on Omarchy
 ```
 
 Or build the package from this repo. It installs the binary, the
