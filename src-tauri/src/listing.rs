@@ -2,6 +2,7 @@ use crate::error::DirectoryError;
 use crate::paths::{display_name, navigable_roots, resolve_navigable_path};
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp::Ordering,
     fs,
     path::{Path, PathBuf},
     time::UNIX_EPOCH,
@@ -35,6 +36,15 @@ pub(crate) enum EntrySort {
     Type,
 }
 
+impl EntrySort {
+    /// Size and date order the whole directory by fields only a stat call can
+    /// supply, so those two columns have to stat every entry before paging.
+    /// Name and type read straight off the directory, so they stat one page.
+    fn needs_metadata(self) -> bool {
+        matches!(self, EntrySort::Size | EntrySort::Modified)
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PathCrumb {
@@ -64,28 +74,70 @@ pub(crate) fn entry_extension(name: &str) -> String {
         .unwrap_or_default()
 }
 
+fn name_order(left: &str, right: &str) -> Ordering {
+    left.to_lowercase().cmp(&right.to_lowercase())
+}
+
+fn extension_order(left: &str, right: &str) -> Ordering {
+    entry_extension(left).cmp(&entry_extension(right))
+}
+
+/// Directories lead whatever the column, and the direction only ever flips the
+/// column itself, so every ordering in this module ends here.
+fn order_by(
+    left_is_directory: bool,
+    right_is_directory: bool,
+    by_column: Ordering,
+    descending: bool,
+) -> Ordering {
+    right_is_directory
+        .cmp(&left_is_directory)
+        .then(if descending { by_column.reverse() } else { by_column })
+}
+
 pub(crate) fn compare_entries(
     left: &DirectoryEntry,
     right: &DirectoryEntry,
     sort: EntrySort,
     descending: bool,
-) -> std::cmp::Ordering {
-    let left_is_directory = left.entry_type == DirectoryEntryType::Directory;
-    let right_is_directory = right.entry_type == DirectoryEntryType::Directory;
-    let by_name = left.name.to_lowercase().cmp(&right.name.to_lowercase());
+) -> Ordering {
+    let by_name = name_order(&left.name, &right.name);
 
-    let by_key = match sort {
+    let by_column = match sort {
         EntrySort::Name => by_name,
         EntrySort::Size => left.size.cmp(&right.size).then(by_name),
         EntrySort::Modified => left.modified.cmp(&right.modified).then(by_name),
-        EntrySort::Type => entry_extension(&left.name)
-            .cmp(&entry_extension(&right.name))
-            .then(by_name),
+        EntrySort::Type => extension_order(&left.name, &right.name).then(by_name),
     };
 
-    right_is_directory
-        .cmp(&left_is_directory)
-        .then(if descending { by_key.reverse() } else { by_key })
+    order_by(
+        left.entry_type == DirectoryEntryType::Directory,
+        right.entry_type == DirectoryEntryType::Directory,
+        by_column,
+        descending,
+    )
+}
+
+fn compare_unstated(
+    left: &UnstatedEntry,
+    right: &UnstatedEntry,
+    sort: EntrySort,
+    descending: bool,
+) -> Ordering {
+    debug_assert!(!sort.needs_metadata(), "size and date cannot order unstated entries");
+    let by_name = name_order(&left.name, &right.name);
+
+    let by_column = match sort {
+        EntrySort::Type => extension_order(&left.name, &right.name).then(by_name),
+        _ => by_name,
+    };
+
+    order_by(
+        left.entry_type == DirectoryEntryType::Directory,
+        right.entry_type == DirectoryEntryType::Directory,
+        by_column,
+        descending,
+    )
 }
 
 impl DirectoryEntry {
@@ -95,52 +147,99 @@ impl DirectoryEntry {
     }
 }
 
-pub(crate) fn describe_entry(directory_entry: &fs::DirEntry) -> Option<DirectoryEntry> {
-    let file_type = directory_entry.file_type().ok()?;
-    let metadata = directory_entry.metadata().ok();
-
-    Some(DirectoryEntry {
-        name: directory_entry.file_name().to_string_lossy().into_owned(),
-        path: directory_entry.path().to_string_lossy().into_owned(),
-        entry_type: if file_type.is_dir() {
-            DirectoryEntryType::Directory
-        } else {
-            DirectoryEntryType::File
-        },
-        size: metadata.as_ref().map_or(0, |data| data.len()),
-        modified: metadata
-            .as_ref()
-            .and_then(|data| data.modified().ok())
-            .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-            .map(|elapsed| elapsed.as_secs() as i64),
-    })
+/// A directory entry before its stat call. `read_dir` hands over the name and
+/// the kind for free; size and modified time are the two fields that cost a
+/// syscall each, which is why they are filled in only for entries being sent.
+struct UnstatedEntry {
+    name: String,
+    path: PathBuf,
+    entry_type: DirectoryEntryType,
 }
 
-pub(crate) fn read_directory_entries(
-    directory: &Path,
-    sort: EntrySort,
-    descending: bool,
-    show_hidden: bool,
-) -> Result<(Vec<DirectoryEntry>, usize), ()> {
-    let directory_entries = fs::read_dir(directory).map_err(|_| ())?;
+impl UnstatedEntry {
+    fn read(directory_entry: &fs::DirEntry) -> Option<Self> {
+        Some(UnstatedEntry {
+            name: directory_entry.file_name().to_string_lossy().into_owned(),
+            path: directory_entry.path(),
+            entry_type: if directory_entry.file_type().ok()?.is_dir() {
+                DirectoryEntryType::Directory
+            } else {
+                DirectoryEntryType::File
+            },
+        })
+    }
+
+    /// `fs::DirEntry::metadata` does not follow symlinks, so neither does this.
+    fn stat(self) -> DirectoryEntry {
+        let metadata = self.path.symlink_metadata().ok();
+
+        DirectoryEntry {
+            name: self.name,
+            path: self.path.to_string_lossy().into_owned(),
+            entry_type: self.entry_type,
+            size: metadata.as_ref().map_or(0, |data| data.len()),
+            modified: metadata
+                .as_ref()
+                .and_then(|data| data.modified().ok())
+                .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+                .map(|elapsed| elapsed.as_secs() as i64),
+        }
+    }
+}
+
+pub(crate) fn describe_entry(directory_entry: &fs::DirEntry) -> Option<DirectoryEntry> {
+    Some(UnstatedEntry::read(directory_entry)?.stat())
+}
+
+fn read_unstated_entries(directory: &Path, show_hidden: bool) -> Result<Vec<UnstatedEntry>, ()> {
     let mut entries = Vec::new();
 
-    for directory_entry in directory_entries {
+    for directory_entry in fs::read_dir(directory).map_err(|_| ())? {
         let directory_entry = directory_entry.map_err(|_| ())?;
-        let name = directory_entry.file_name().to_string_lossy().into_owned();
 
-        if !show_hidden && name.starts_with('.') {
+        let Some(entry) = UnstatedEntry::read(&directory_entry) else {
             continue;
-        }
+        };
 
-        if let Some(entry) = describe_entry(&directory_entry) {
+        if show_hidden || !entry.name.starts_with('.') {
             entries.push(entry);
         }
     }
 
-    entries.sort_by(|left, right| compare_entries(left, right, sort, descending));
+    Ok(entries)
+}
 
-    let total = entries.len();
+fn page<T>(entries: Vec<T>, offset: usize, page_size: usize) -> Vec<T> {
+    entries.into_iter().skip(offset).take(page_size).collect()
+}
+
+/// Returns one page of entries and the directory's total, statting every entry
+/// only when the sort column needs it. See [`EntrySort::needs_metadata`].
+pub(crate) fn read_directory_page(
+    directory: &Path,
+    sort: EntrySort,
+    descending: bool,
+    show_hidden: bool,
+    offset: usize,
+    page_size: usize,
+) -> Result<(Vec<DirectoryEntry>, usize), ()> {
+    let mut unstated = read_unstated_entries(directory, show_hidden)?;
+    let total = unstated.len();
+
+    if sort.needs_metadata() {
+        let mut entries: Vec<DirectoryEntry> = unstated.into_iter().map(UnstatedEntry::stat).collect();
+        entries.sort_by(|left, right| compare_entries(left, right, sort, descending));
+
+        return Ok((page(entries, offset, page_size), total));
+    }
+
+    unstated.sort_by(|left, right| compare_unstated(left, right, sort, descending));
+
+    let entries = page(unstated, offset, page_size)
+        .into_iter()
+        .map(UnstatedEntry::stat)
+        .collect();
+
     Ok((entries, total))
 }
 
@@ -227,12 +326,11 @@ pub(crate) fn read_directory_listing(
         return Err(DirectoryError::unavailable());
     }
 
-    let (entries, total) = read_directory_entries(&directory, sort, descending, show_hidden)
-        .map_err(|_| DirectoryError::read_failed())?;
-
     let page_size = limit.clamp(1, MAX_PAGE_SIZE);
+    let (entries, total) =
+        read_directory_page(&directory, sort, descending, show_hidden, offset, page_size)
+            .map_err(|_| DirectoryError::read_failed())?;
     let has_more = offset.saturating_add(page_size) < total;
-    let entries = entries.into_iter().skip(offset).take(page_size).collect();
 
     Ok(DirectoryListing {
         crumbs: path_crumbs(&directory, &navigable_roots()),
@@ -246,8 +344,8 @@ pub(crate) fn read_directory_listing(
 #[cfg(test)]
 mod tests {
     use super::{
-        compare_entries, entry_extension, path_crumbs, DirectoryEntry, DirectoryEntryType,
-        EntrySort,
+        compare_entries, compare_unstated, entry_extension, path_crumbs, read_directory_page,
+        DirectoryEntry, DirectoryEntryType, EntrySort, UnstatedEntry,
     };
     use std::path::{Path, PathBuf};
 
@@ -317,5 +415,83 @@ mod tests {
         assert_eq!(entry_extension("archive.tar.gz"), "gz");
         assert_eq!(entry_extension("README"), "");
         assert_eq!(entry_extension(".bashrc"), "");
+    }
+
+    #[test]
+    fn only_size_and_date_need_the_stat_calls() {
+        assert!(EntrySort::Size.needs_metadata());
+        assert!(EntrySort::Modified.needs_metadata());
+        assert!(!EntrySort::Name.needs_metadata());
+        assert!(!EntrySort::Type.needs_metadata());
+    }
+
+    /// The cheap path has to reach the same order as the full one, or paging by
+    /// name would silently return different entries than it used to.
+    #[test]
+    fn the_unstated_order_matches_the_statted_one() {
+        let names = ["Work", "a.txt", "B.md", "archive.tar.gz", ".hidden", "README"];
+        let listing = || {
+            names
+                .iter()
+                .enumerate()
+                .map(|(index, name)| entry(name, *name == "Work", index as u64))
+                .collect::<Vec<_>>()
+        };
+        let unstated = || {
+            names
+                .iter()
+                .map(|name| UnstatedEntry {
+                    name: (*name).to_owned(),
+                    path: PathBuf::from(format!("/home/dave/{name}")),
+                    entry_type: if *name == "Work" {
+                        DirectoryEntryType::Directory
+                    } else {
+                        DirectoryEntryType::File
+                    },
+                })
+                .collect::<Vec<_>>()
+        };
+
+        for sort in [EntrySort::Name, EntrySort::Type] {
+            for descending in [false, true] {
+                let mut cheap = unstated();
+                cheap.sort_by(|left, right| compare_unstated(left, right, sort, descending));
+
+                assert_eq!(
+                    cheap.into_iter().map(|item| item.name).collect::<Vec<_>>(),
+                    sorted(listing(), sort, descending),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_page_carries_the_real_sizes_and_the_full_total() {
+        let directory = tempfile::tempdir().unwrap();
+        for (name, bytes) in [("a.txt", 1_usize), ("b.txt", 22), ("c.txt", 333)] {
+            std::fs::write(directory.path().join(name), vec![b'x'; bytes]).unwrap();
+        }
+
+        let (entries, total) =
+            read_directory_page(directory.path(), EntrySort::Name, false, false, 1, 1).unwrap();
+
+        assert_eq!(total, 3);
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "b.txt");
+        assert_eq!(entries[0].size, 22);
+    }
+
+    #[test]
+    fn hidden_entries_stay_out_of_the_total() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::write(directory.path().join("visible.txt"), b"x").unwrap();
+        std::fs::write(directory.path().join(".hidden"), b"x").unwrap();
+
+        let (_, shown) =
+            read_directory_page(directory.path(), EntrySort::Name, false, false, 0, 10).unwrap();
+        let (_, all) =
+            read_directory_page(directory.path(), EntrySort::Name, false, true, 0, 10).unwrap();
+
+        assert_eq!((shown, all), (1, 2));
     }
 }
