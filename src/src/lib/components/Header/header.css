@@ -31,9 +31,11 @@
 
 .app-header__tab {
   display: flex;
-  flex: 0 0 auto;
+  /* A fixed 156px pushed the window controls off the right edge once the window
+     got narrow enough, so the tab gives way before they do. */
+  flex: 0 1 156px;
   align-items: center;
-  width: 156px;
+  min-width: 72px;
   height: 28px;
   padding-right: 6px;
   border-radius: 6px 6px 0 0;
@@ -146,12 +148,26 @@
 
 .app-header__commandbar {
   display: grid;
-  /* The search field gives way before the bar overflows a narrow window. */
-  grid-template-columns: auto minmax(0, 1fr) minmax(120px, 254px);
+  grid-template-columns: auto minmax(0, 1fr) 254px;
   align-items: center;
   padding: 0 12px 0 10px;
   background: var(--surface-commandbar);
   border-bottom: 1px solid var(--border-commandbar);
+}
+
+/* The search field is sized ahead of the breadcrumb, so at full width it took
+   its 254px and left the trail nothing to render in. Knowing where you are
+   matters more than a wide search box, so the field yields first. */
+@media (max-width: 1000px) {
+  .app-header__commandbar {
+    grid-template-columns: auto minmax(0, 1fr) 170px;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-header__commandbar {
+    grid-template-columns: auto minmax(0, 1fr) 110px;
+  }
 }
 
 .app-header__navigation {
@@ -185,10 +201,19 @@
   min-width: 0;
   height: 30px;
   padding: 0 6px;
-  overflow: hidden;
+  /* Crumbs used to shrink to their padding in a narrow window, leaving a row of
+     unreadable 16px stubs. They keep their width now and the trail scrolls,
+     kept at the end so the folder you are in is the one you can see. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
   color: var(--text-primary);
   font-size: 14px;
   white-space: nowrap;
+}
+
+.app-header__path::-webkit-scrollbar {
+  display: none;
 }
 
 .app-header__address {
@@ -211,7 +236,7 @@
 
 .app-header__crumb {
   display: flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   align-items: center;
   gap: 10px;
   min-width: 0;

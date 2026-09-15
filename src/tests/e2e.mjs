@@ -190,6 +190,17 @@ await scenario('a narrow window keeps every command reachable', async ({ page, o
     return out
   })
   check('no command sits outside the window', offscreen, [])
+
+  // The search field is sized before the breadcrumb, and used to take its full
+  // 254px and leave the trail zero width to render in.
+  const trail = await page.evaluate(() => {
+    const el = document.querySelector('.app-header__path')
+    const last = [...el.querySelectorAll('.app-header__crumb')].pop()
+    const r = last.getBoundingClientRect(), box = el.getBoundingClientRect()
+    return { width: Math.round(box.width), lastVisible: r.right <= box.right + 1 && r.left >= box.left - 1 }
+  })
+  check('the breadcrumb still has room', trail.width > 60, true)
+  check('the current folder is the crumb on show', trail.lastVisible, true)
 })
 
 await scenario('sidebar folder tree', async ({ page }) => {

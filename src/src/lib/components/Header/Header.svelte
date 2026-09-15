@@ -22,6 +22,15 @@
   let query = $state('')
   let address = $state('')
   let editingAddress = $state(false)
+  let pathTrail = $state<HTMLElement | null>(null)
+
+  // In a narrow window the trail scrolls; the folder you are in is at its end,
+  // so that is the end worth showing.
+  $effect(() => {
+    const crumbs = active.crumbs
+    if (pathTrail) pathTrail.scrollLeft = pathTrail.scrollWidth
+    void crumbs
+  })
   let searchTimer: ReturnType<typeof setTimeout> | null = null
   let searchInput = $state<HTMLInputElement | null>(null)
 
@@ -175,7 +184,7 @@
         }} />
       </form>
     {:else}
-    <nav class="app-header__path" aria-label="Breadcrumb" ondblclick={() => (editingAddress = true)}>
+    <nav class="app-header__path" aria-label="Breadcrumb" bind:this={pathTrail} ondblclick={() => (editingAddress = true)}>
       <button class="app-header__crumb" type="button" onclick={() => active.goHome()}>
         <span class="masked-icon app-header__tab-icon" style="--icon: url({active.view.kind === 'home' ? HomeIcon : FolderIcon})" aria-hidden="true"></span>
         <span>{active.view.kind === 'home' ? 'Home' : 'Files'}</span>
