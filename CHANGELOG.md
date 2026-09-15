@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.3 — 2026-09-15
+
+### Added
+
+- The sidebar collapses to a rail of icons, which gives a tiled window back most of its width. Hovering an icon still names it, and the choice is remembered.
+
+### Fixed
+
+- 0.2.2's click fix never applied when omafil was opened from the app menu. Omarchy exports `GDK_BACKEND=wayland,x11,*` for the whole session, and the check treated the variable merely being set as a deliberate choice of Wayland, so it stepped aside. Only a value naming no Wayland backend is left alone now; `OMAFIL_BACKEND=wayland` overrules it.
+
 ## 0.2.2 — 2026-09-15
 
 ### Fixed
