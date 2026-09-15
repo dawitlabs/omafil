@@ -4,6 +4,10 @@
 
 A fast file manager for [Omarchy](https://omarchy.org). Tauri 2, Rust and Svelte 5.
 
+```sh
+yay -S omafil-git
+```
+
 ## What makes it Omarchy's
 
 - **Follows the active theme live.** Every colour comes from the current theme's `colors.toml`, and `omarchy theme set` retints the app on the spot. Off Omarchy it falls back to its own light and dark palettes.
