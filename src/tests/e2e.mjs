@@ -169,6 +169,29 @@ await scenario('emptying the recycle bin asks first', async ({ page, rows, openD
   check('confirming empties it', await page.locator('.recycle-list__row').count(), 0)
 })
 
+await scenario('a narrow window keeps every command reachable', async ({ page, openDocuments }) => {
+  await page.setViewportSize({ width: 600, height: 620 })
+  await openDocuments()
+
+  // A tiling WM hands out widths below tauri.conf.json's minWidth, so nothing
+  // may sit outside the window: it used to scroll with the scrollbar hidden.
+  const shell = await page.evaluate(() => {
+    const el = document.querySelector('.app-shell')
+    return { client: el.clientWidth, scroll: el.scrollWidth }
+  })
+  check('the shell does not overflow the window', shell.scroll <= shell.client + 1, true)
+
+  const offscreen = await page.evaluate(() => {
+    const out = []
+    for (const el of document.querySelectorAll('.file-commands button')) {
+      const r = el.getBoundingClientRect()
+      if (r.right > window.innerWidth + 1 || r.left < -1) out.push(el.textContent.trim())
+    }
+    return out
+  })
+  check('no command sits outside the window', offscreen, [])
+})
+
 await scenario('sidebar folder tree', async ({ page }) => {
   await page.getByRole('button', { name: 'Expand dave' }).first().click()
   await page.waitForTimeout(600)

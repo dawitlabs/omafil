@@ -146,7 +146,8 @@
 
 .app-header__commandbar {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 254px;
+  /* The search field gives way before the bar overflows a narrow window. */
+  grid-template-columns: auto minmax(0, 1fr) minmax(120px, 254px);
   align-items: center;
   padding: 0 12px 0 10px;
   background: var(--surface-commandbar);
