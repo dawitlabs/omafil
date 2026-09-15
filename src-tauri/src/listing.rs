@@ -191,7 +191,17 @@ pub(crate) fn describe_entry(directory_entry: &fs::DirEntry) -> Option<Directory
     Some(UnstatedEntry::read(directory_entry)?.stat())
 }
 
-fn read_unstated_entries(directory: &Path, show_hidden: bool) -> Result<Vec<UnstatedEntry>, ()> {
+/// Type-ahead matches the way a reader scanning the folder would: anywhere in
+/// the name, either case. An empty filter keeps everything.
+fn matches_filter(name: &str, filter: &str) -> bool {
+    filter.is_empty() || name.to_lowercase().contains(&filter.to_lowercase())
+}
+
+fn read_unstated_entries(
+    directory: &Path,
+    show_hidden: bool,
+    filter: &str,
+) -> Result<Vec<UnstatedEntry>, ()> {
     let mut entries = Vec::new();
 
     for directory_entry in fs::read_dir(directory).map_err(|_| ())? {
@@ -201,7 +211,9 @@ fn read_unstated_entries(directory: &Path, show_hidden: bool) -> Result<Vec<Unst
             continue;
         };
 
-        if show_hidden || !entry.name.starts_with('.') {
+        let is_hidden = entry.name.starts_with('.');
+
+        if (show_hidden || !is_hidden) && matches_filter(&entry.name, filter) {
             entries.push(entry);
         }
     }
@@ -213,8 +225,8 @@ fn page<T>(entries: Vec<T>, offset: usize, page_size: usize) -> Vec<T> {
     entries.into_iter().skip(offset).take(page_size).collect()
 }
 
-/// Returns one page of entries and the directory's total, statting every entry
-/// only when the sort column needs it. See [`EntrySort::needs_metadata`].
+/// Returns one page of matching entries and how many matched, statting every
+/// entry only when the sort column needs it. See [`EntrySort::needs_metadata`].
 pub(crate) fn read_directory_page(
     directory: &Path,
     sort: EntrySort,
@@ -222,8 +234,9 @@ pub(crate) fn read_directory_page(
     show_hidden: bool,
     offset: usize,
     page_size: usize,
+    filter: &str,
 ) -> Result<(Vec<DirectoryEntry>, usize), ()> {
-    let mut unstated = read_unstated_entries(directory, show_hidden)?;
+    let mut unstated = read_unstated_entries(directory, show_hidden, filter)?;
     let total = unstated.len();
 
     if sort.needs_metadata() {
@@ -319,6 +332,7 @@ pub(crate) fn read_directory_listing(
     show_hidden: bool,
     offset: usize,
     limit: usize,
+    filter: &str,
 ) -> Result<DirectoryListing, DirectoryError> {
     let directory = resolve_navigable_path(&path)?;
 
@@ -328,7 +342,7 @@ pub(crate) fn read_directory_listing(
 
     let page_size = limit.clamp(1, MAX_PAGE_SIZE);
     let (entries, total) =
-        read_directory_page(&directory, sort, descending, show_hidden, offset, page_size)
+        read_directory_page(&directory, sort, descending, show_hidden, offset, page_size, filter)
             .map_err(|_| DirectoryError::read_failed())?;
     let has_more = offset.saturating_add(page_size) < total;
 
@@ -344,8 +358,8 @@ pub(crate) fn read_directory_listing(
 #[cfg(test)]
 mod tests {
     use super::{
-        compare_entries, compare_unstated, entry_extension, path_crumbs, read_directory_page,
-        DirectoryEntry, DirectoryEntryType, EntrySort, UnstatedEntry,
+        compare_entries, compare_unstated, entry_extension, matches_filter, path_crumbs,
+        read_directory_page, DirectoryEntry, DirectoryEntryType, EntrySort, UnstatedEntry,
     };
     use std::path::{Path, PathBuf};
 
@@ -473,12 +487,40 @@ mod tests {
         }
 
         let (entries, total) =
-            read_directory_page(directory.path(), EntrySort::Name, false, false, 1, 1).unwrap();
+            read_directory_page(directory.path(), EntrySort::Name, false, false, 1, 1, "").unwrap();
 
         assert_eq!(total, 3);
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].name, "b.txt");
         assert_eq!(entries[0].size, 22);
+    }
+
+    #[test]
+    fn the_filter_matches_anywhere_in_the_name_either_case() {
+        assert!(matches_filter("Q3-Report.pdf", "report"));
+        assert!(matches_filter("q3-report.pdf", "REPORT"));
+        assert!(matches_filter("anything", ""));
+        assert!(!matches_filter("notes.md", "report"));
+    }
+
+    /// The total drives "showing X of Y" and the load-more button, so it has to
+    /// count matches rather than the whole directory.
+    #[test]
+    fn a_filtered_total_counts_only_the_matches() {
+        let directory = tempfile::tempdir().unwrap();
+        for name in ["q3-report.pdf", "q4-report.pdf", "notes.md"] {
+            std::fs::write(directory.path().join(name), b"x").unwrap();
+        }
+
+        let (entries, total) =
+            read_directory_page(directory.path(), EntrySort::Name, false, false, 0, 10, "REPORT")
+                .unwrap();
+
+        assert_eq!(total, 2);
+        assert_eq!(
+            entries.into_iter().map(|item| item.name).collect::<Vec<_>>(),
+            ["q3-report.pdf", "q4-report.pdf"],
+        );
     }
 
     #[test]
@@ -488,9 +530,9 @@ mod tests {
         std::fs::write(directory.path().join(".hidden"), b"x").unwrap();
 
         let (_, shown) =
-            read_directory_page(directory.path(), EntrySort::Name, false, false, 0, 10).unwrap();
+            read_directory_page(directory.path(), EntrySort::Name, false, false, 0, 10, "").unwrap();
         let (_, all) =
-            read_directory_page(directory.path(), EntrySort::Name, false, true, 0, 10).unwrap();
+            read_directory_page(directory.path(), EntrySort::Name, false, true, 0, 10, "").unwrap();
 
         assert_eq!((shown, all), (1, 2));
     }

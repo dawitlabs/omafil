@@ -21,6 +21,7 @@ yay -S omafil-bin
 ## Files
 
 - Tabs, search, pins, tags, recent files, recycle bin.
+- Type in a folder to filter it: the list narrows to names containing what you typed, Backspace edits, Esc restores. Off while vim keys are on.
 - Cancellable copy, move and ZIP operations with byte progress and staged publication (a cancelled copy never leaves half a file).
 - Extract ZIP, tar, gz, bz2, xz, zst, lz4, 7z, iso, cab and rar.
 - Split view: two panes on one folder, F6 switches, drag between them.

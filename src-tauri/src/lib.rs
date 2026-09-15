@@ -62,9 +62,10 @@ async fn list_directory(
     show_hidden: bool,
     offset: usize,
     limit: usize,
+    filter: String,
 ) -> Result<DirectoryListing, DirectoryError> {
     tauri::async_runtime::spawn_blocking(move || {
-        read_directory_listing(path, sort, descending, show_hidden, offset, limit)
+        read_directory_listing(path, sort, descending, show_hidden, offset, limit, &filter)
     })
         .await
         .map_err(|_| DirectoryError::read_failed())?
