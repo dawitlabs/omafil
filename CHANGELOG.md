@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.1 — 2026-09-15
+
+### Added
+
+- Type in a folder to filter it: the list narrows to names containing what you typed, the top match is selected so Enter opens it, Backspace edits and Esc restores. Off while vim keys are on.
+- `omafil-bin` on the AUR, so installing no longer needs a Rust toolchain or a compile.
+
+### Fixed
+
+- Ctrl+C and Ctrl+X acted on whatever the type-ahead jump had landed on rather than the selection.
+
+### Changed
+
+- A folder listing now stats only the page it returns when sorting by name or type, instead of every entry in the directory on every page request.
+- The AUR build no longer reruns the test suite, which had it compile the whole crate graph a second time.
+
 ## 0.2.0 — 2026-09-15
 
 ### Added
