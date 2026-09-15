@@ -4,15 +4,16 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 const NARROW = 820
 const MID = 1000
 
-/// Below this the difference is rounding, not a scaling fault worth correcting.
-const DRIFT_THRESHOLD = 1.05
+/// Within this of 1:1 the difference is rounding, not a fault worth correcting.
+const DRIFT_TOLERANCE = 0.05
 
 /**
  * omafil runs under XWayland, because WebKitGTK delivers pointer events at the
- * wrong coordinates under fractional Wayland scaling. XWayland in turn reports
- * a scale of 1 through every API the app can reach, so on a fractionally scaled
- * display everything would draw at physical-pixel size — far smaller than the
- * rest of the desktop and too small to hit.
+ * wrong coordinates under fractional Wayland scaling. What XWayland then hands
+ * the webview rarely matches the desktop: with no scale set it reports 1 and
+ * everything draws at physical-pixel size, too small to hit; with Omarchy's
+ * `GDK_SCALE=2` against a 1.6 display it draws a quarter too large. The drift
+ * is corrected in whichever direction it runs.
  *
  * The compositor still knows the real scale, so that is where it comes from.
  * The correction is the CSS `zoom` property, which feeds back into layout, so
@@ -48,7 +49,7 @@ async function correct(): Promise<void> {
   const root = document.documentElement
   const drift = window.innerWidth / width
 
-  root.style.zoom = drift > DRIFT_THRESHOLD ? String(drift) : ''
+  root.style.zoom = Math.abs(drift - 1) > DRIFT_TOLERANCE ? String(drift) : ''
   root.dataset.width = width <= NARROW ? 'narrow' : width <= MID ? 'mid' : 'wide'
 }
 
