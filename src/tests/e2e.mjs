@@ -91,6 +91,9 @@ await scenario('type to filter the folder', async ({ page, rows, openDocuments }
   check('typing narrows to the substring match', await rows(), ['notes.txt'])
   check('the filter is visible', await page.locator('.file-list__filter-query').innerText(), 'ote')
 
+  check('the top match is selected', await page.locator('[data-path][aria-selected="true"]').count(), 1)
+
+  // The point of selecting it: Enter opens the match without touching the mouse.
   await page.keyboard.press('Backspace')
   await page.keyboard.press('Backspace')
   await page.waitForTimeout(500)
@@ -100,6 +103,21 @@ await scenario('type to filter the folder', async ({ page, rows, openDocuments }
   await page.waitForTimeout(500)
   check('escape restores the folder', await rows(), ['budget.xlsx', 'notes.txt', 'read.pdf'])
   check('the filter bar goes away', await page.locator('.file-list__filter').count(), 0)
+})
+
+await scenario('enter opens the filtered match', async ({ page, rows }) => {
+  // The Home landing view mounts no file list, so this starts in the home folder.
+  await page.locator('.file-sidebar__item', { hasText: 'dave' }).first().click()
+  await page.waitForTimeout(700)
+
+  await page.keyboard.type('doc')
+  await page.waitForTimeout(500)
+  check('the folder narrows to the match', await rows(), ['Documents'])
+
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(700)
+  check('enter walked into it', await rows(), ['budget.xlsx', 'notes.txt', 'read.pdf'])
+  check('and the filter did not follow', await page.locator('.file-list__filter').count(), 0)
 })
 
 await scenario('a filter that matches nothing', async ({ page, rows, openDocuments }) => {

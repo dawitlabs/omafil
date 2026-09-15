@@ -52,6 +52,14 @@
     row?.scrollIntoView({ block: 'nearest' })
   }
 
+  // Filtering replaces every row, so the list is left with nothing focused and
+  // Enter has no entry to open. Selecting the top match hands the keyboard back.
+  $effect(() => {
+    const [first] = navigation.filter ? entries : []
+
+    if (first) moveSelection(0)
+  })
+
   function activateRow(entry: DirectoryEntry, index: number, event: MouseEvent) {
     activeIndex = index
 
