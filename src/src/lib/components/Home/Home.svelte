@@ -30,6 +30,7 @@
   let recycleError = $state<string | null>(null)
   let recycleLoading = $state(false)
   let recycleSelection = $state<string[]>([])
+  let isEmptyingRecycleBin = $state(false)
   let menu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null)
 
   function readableError(error: unknown, fallback: string): string {
@@ -88,7 +89,7 @@
   }
 
   async function emptyRecycleBin() {
-    if (!confirm('Permanently delete every item in the Recycle Bin?')) return
+    isEmptyingRecycleBin = false
     await invoke('empty_recycle_bin')
     recycleSelection = []
     await loadRecycleBin()
@@ -125,9 +126,22 @@
     {:else if tabs.active.view.kind === 'recycle'}
       <section class="home-view__section" aria-labelledby="recycle-heading">
         <h1 id="recycle-heading" class="home-view__heading"><span class="masked-icon home-view__heading-icon" style="--icon: url({DeleteIcon})" aria-hidden="true"></span><span>Recycle Bin</span></h1>
-        <div class="file-commands" role="toolbar" aria-label="Recycle Bin commands"><button class="file-commands__button" type="button" disabled={recycleSelection.length === 0} onclick={restoreSelected}>Restore</button><button class="file-commands__button" type="button" disabled={recycleItems.length === 0} onclick={emptyRecycleBin}>Empty Recycle Bin</button></div>
+        <div class="file-commands" role="toolbar" aria-label="Recycle Bin commands"><button class="file-commands__button" type="button" disabled={recycleSelection.length === 0} onclick={restoreSelected}>Restore</button><button class="file-commands__button" type="button" disabled={recycleItems.length === 0} onclick={() => (isEmptyingRecycleBin = true)}>Empty Recycle Bin</button></div>
         {#if recycleLoading}<p class="home-view__state">Loading Recycle Bin…</p>{:else if recycleError}<div class="home-view__error" role="alert"><p>{recycleError}</p><button class="home-view__retry" type="button" onclick={loadRecycleBin}>Try again</button></div>{:else if recycleItems.length === 0}<p class="home-view__state">The Recycle Bin is empty.</p>{:else}<div class="recycle-list">{#each recycleItems as item (item.id)}<label class="recycle-list__row"><input type="checkbox" checked={recycleSelection.includes(item.id)} onchange={() => recycleSelection = recycleSelection.includes(item.id) ? recycleSelection.filter((id) => id !== item.id) : [...recycleSelection, item.id]} /><span>{item.name}</span><span title={item.originalPath}>{item.originalPath}</span><span>{formatModified(item.deletedAt)}</span></label>{/each}</div>{/if}
       </section>
+
+      {#if isEmptyingRecycleBin}
+        <div class="file-conflict__backdrop" role="presentation" onclick={(event) => event.target === event.currentTarget && (isEmptyingRecycleBin = false)}>
+          <dialog open class="file-conflict" aria-labelledby="empty-recycle-title">
+            <h2 id="empty-recycle-title">Empty the Recycle Bin?</h2>
+            <p>{formatItems(recycleItems.length)} will be deleted permanently. This cannot be undone.</p>
+            <div class="file-conflict__actions">
+              <button type="button" onclick={() => (isEmptyingRecycleBin = false)}>Cancel</button>
+              <button class="file-conflict__replace" type="button" onclick={emptyRecycleBin}>Delete permanently</button>
+            </div>
+          </dialog>
+        </div>
+      {/if}
     {:else if tabs.active.view.kind === 'home'}
       <section class="home-view__section" aria-labelledby="pinned-heading">
         <h1 id="pinned-heading" class="home-view__heading">

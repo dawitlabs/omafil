@@ -34,6 +34,8 @@
         new_directory: (a) => { raw[a.parentPath] = [...(raw[a.parentPath] ?? []), [a.name, 'd', 0, now]]; raw[`${a.parentPath}/${a.name}`] = []; return `${a.parentPath}/${a.name}` },
         trash_paths: (a) => a.paths.map((full) => { const p = cut(full), n = base(full), r = (raw[p] ?? []).find((x) => x[0] === n)
           if (!r) return null; raw[p] = raw[p].filter((x) => x !== r); const id = `t${bin.length}`; bin.push({ id, parent: p, row: r }); return id }).filter(Boolean),
+        list_recycle_items: () => bin.map((b) => ({ id: b.id, name: b.row[0], originalPath: `${b.parent}/${b.row[0]}`, deletedAt: b.row[3] })),
+        empty_recycle_bin: () => { bin.length = 0; return null },
         restore_recycle_items: (a) => { for (const id of a.ids) { const item = bin.find((b) => b.id === id); if (item) raw[item.parent] = [...(raw[item.parent] ?? []), item.row] } return null },
         transfer_paths: (a) => a.paths.map((full) => { const p = cut(full), n = base(full), r = (raw[p] ?? []).find((x) => x[0] === n)
           if (!r) return { sourcePath: full, destinationPath: full, skipped: true }

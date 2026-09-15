@@ -304,6 +304,9 @@
 }
 
 .file-conflict {
+  /* A <dialog open> is position: absolute per the UA sheet, which ignores the
+     backdrop's centering. .dialog opts out the same way. */
+  position: static;
   width: min(460px, 100%);
   margin: 0;
   padding: 22px;

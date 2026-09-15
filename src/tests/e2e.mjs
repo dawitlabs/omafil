@@ -138,6 +138,37 @@ await scenario('a filter that matches nothing', async ({ page, rows, openDocumen
   check('emptying the filter restores the folder', await rows(), ['budget.xlsx', 'notes.txt', 'read.pdf'])
 })
 
+await scenario('emptying the recycle bin asks first', async ({ page, rows, openDocuments }) => {
+  await openDocuments()
+  await page.locator('[data-path]', { hasText: 'notes.txt' }).first().click()
+  await page.getByRole('button', { name: 'Delete' }).first().click()
+  await page.waitForTimeout(500)
+
+  await page.getByText('Recycle Bin', { exact: false }).first().click()
+  await page.waitForTimeout(600)
+  check('the trashed file is in the bin', await page.locator('.recycle-list__row').count(), 1)
+
+  await page.getByRole('button', { name: 'Empty Recycle Bin' }).first().click()
+  await page.waitForTimeout(300)
+  // The webview's own confirm() would block Playwright here instead of rendering.
+  check('the app asks with its own dialog', await page.locator('.file-conflict h2').innerText(), 'Empty the Recycle Bin?')
+
+  // A <dialog open> is absolutely positioned by the UA sheet unless overridden.
+  const box = await page.locator('.file-conflict').boundingBox()
+  const width = page.viewportSize().width
+  check('the dialog is centred', Math.abs((box.x + box.width / 2) - width / 2) < 2, true)
+
+  await page.getByRole('button', { name: 'Cancel' }).first().click()
+  await page.waitForTimeout(300)
+  check('cancel keeps the item', await page.locator('.recycle-list__row').count(), 1)
+
+  await page.getByRole('button', { name: 'Empty Recycle Bin' }).first().click()
+  await page.waitForTimeout(300)
+  await page.getByRole('button', { name: 'Delete permanently' }).first().click()
+  await page.waitForTimeout(500)
+  check('confirming empties it', await page.locator('.recycle-list__row').count(), 0)
+})
+
 await scenario('sidebar folder tree', async ({ page }) => {
   await page.getByRole('button', { name: 'Expand dave' }).first().click()
   await page.waitForTimeout(600)
