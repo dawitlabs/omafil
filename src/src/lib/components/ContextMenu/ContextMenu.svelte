@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { viewport } from '../../displayScale'
   export type ContextMenuItem =
     | { kind: 'separator' }
     | { kind: 'heading'; label: string }
@@ -19,13 +20,19 @@
 
   let menu = $state<HTMLElement | null>(null)
 
-  const position = $derived.by(() => {
+  const MARGIN = 8
+
+  const placement = $derived.by(() => {
+    const { width: available, height: room } = viewport()
     const width = menu?.offsetWidth ?? 220
     const height = menu?.offsetHeight ?? 0
 
     return {
-      left: Math.min(x, window.innerWidth - width - 8),
-      top: Math.min(y, Math.max(8, window.innerHeight - height - 8)),
+      left: Math.max(MARGIN, Math.min(x, available - width - MARGIN)),
+      top: Math.max(MARGIN, Math.min(y, room - height - MARGIN)),
+      // A menu with more entries than the window is tall scrolls rather than
+      // running off the bottom edge.
+      maxHeight: room - MARGIN * 2,
     }
   })
 
@@ -44,7 +51,7 @@
 
 <div class="context-menu__backdrop" onpointerdown={onclose} oncontextmenu={(event) => event.preventDefault()} role="presentation"></div>
 
-<div bind:this={menu} class="context-menu" style="left: {position.left}px; top: {position.top}px" role="menu" tabindex="-1">
+<div bind:this={menu} class="context-menu" style="left: {placement.left}px; top: {placement.top}px; max-height: {placement.maxHeight}px" role="menu" tabindex="-1">
   {#each items as item, index (index)}
     {#if item.kind === 'separator'}
       <hr class="context-menu__separator" />

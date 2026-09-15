@@ -158,16 +158,12 @@
 /* The search field is sized ahead of the breadcrumb, so at full width it took
    its 254px and left the trail nothing to render in. Knowing where you are
    matters more than a wide search box, so the field yields first. */
-@media (max-width: 1000px) {
-  .app-header__commandbar {
-    grid-template-columns: auto minmax(0, 1fr) 170px;
-  }
+:root[data-width="mid"] .app-header__commandbar {
+  grid-template-columns: auto minmax(0, 1fr) 170px;
 }
 
-@media (max-width: 760px) {
-  .app-header__commandbar {
-    grid-template-columns: auto minmax(0, 1fr) 110px;
-  }
+:root[data-width="narrow"] .app-header__commandbar {
+  grid-template-columns: auto minmax(0, 1fr) 110px;
 }
 
 .app-header__navigation {

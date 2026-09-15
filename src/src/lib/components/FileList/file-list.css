@@ -126,29 +126,29 @@
   cursor: default;
 }
 /* Those five columns have a 490px floor, which with the sidebar pushed the whole
-   shell wider than the window and put the right-hand commands out of reach. A
-   tiling WM hands out widths below the configured minimum, so the columns have
-   to give way rather than overflow. Least useful goes first. */
-@media (max-width: 1000px) {
-  .file-list__columns,
-  .file-row {
-    grid-template-columns: 20px minmax(120px, 2fr) 150px 90px;
-  }
-
-  .file-row__kind {
-    display: none;
-  }
+   shell wider than the window and put the right-hand commands out of reach. The
+   width comes from the root element rather than a media query, because on a
+   fractionally scaled display the viewport is wider than the window it is drawn
+   in. Least useful column goes first. */
+:root[data-width="mid"] .file-list__columns,
+:root[data-width="mid"] .file-row,
+:root[data-width="narrow"] .file-list__columns,
+:root[data-width="narrow"] .file-row {
+  grid-template-columns: 20px minmax(120px, 2fr) 150px 90px;
 }
 
-@media (max-width: 820px) {
-  .file-list__columns,
-  .file-row {
-    grid-template-columns: 20px minmax(100px, 1fr) 90px;
-  }
+:root[data-width="mid"] .file-row__kind,
+:root[data-width="narrow"] .file-row__kind {
+  display: none;
+}
 
-  .file-row__modified {
-    display: none;
-  }
+:root[data-width="narrow"] .file-list__columns,
+:root[data-width="narrow"] .file-row {
+  grid-template-columns: 20px minmax(100px, 1fr) 90px;
+}
+
+:root[data-width="narrow"] .file-row__modified {
+  display: none;
 }
 
 

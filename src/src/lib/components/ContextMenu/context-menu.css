@@ -9,6 +9,8 @@
   z-index: 21;
   min-width: 208px;
   padding: 5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border-menu);
   border-radius: 8px;
   background: var(--surface-menu);

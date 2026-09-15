@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { mount } from "svelte";
+import { matchDisplayScale } from "./lib/displayScale";
 import "./lib/styles/global.css";
 import App from "./App.svelte";
 
@@ -12,6 +13,9 @@ window.addEventListener('unhandledrejection', (event) => {
   const reason: unknown = event.reason
   report(reason instanceof Error ? reason.message : String(reason), reason instanceof Error ? reason.stack : undefined)
 })
+
+// Before mounting, so the first frame is already the right size.
+await matchDisplayScale().catch((error: unknown) => report('display scale', String(error)))
 
 const app = mount(App, {
   target: document.getElementById("app")!,

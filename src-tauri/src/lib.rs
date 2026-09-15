@@ -1,5 +1,6 @@
-mod drives;
 mod archive;
+mod display;
+mod drives;
 mod diagnostics;
 mod error;
 mod icon_theme;
@@ -382,7 +383,14 @@ async fn list_drives() -> Result<Vec<DriveInfo>, DriveError> {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[tauri::command]
+fn display_scale() -> Option<f64> {
+    display::compositor_scale()
+}
+
 pub fn run() {
+    display::prefer_xwayland();
+
     diagnostics::install_panic_hook();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -439,6 +447,7 @@ pub fn run() {
             permanently_delete_paths,
             create_zip,
             extract_zip,
+            display_scale,
             list_recycle_items,
             restore_recycle_items,
             empty_recycle_bin,
