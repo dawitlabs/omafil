@@ -63,3 +63,49 @@ is tmpfs here and these file counts would be charged to RAM). The harness runs
 on its own Hyprland workspace and returns to the previous one, and kills a
 leftover instance between runs — both apps forward a second launch to a running
 instance, which would otherwise make every repeat measure forwarding.
+
+## GTK4 toolkit spike
+
+`spike/gtk4` is a minimal GTK4 file list in Rust — `DirectoryList` feeding a
+`ListView` through a `SignalListItemFactory`, the idiomatic path a real port
+would take. Same window size and release profile as omafil. It has no
+operations, search, thumbnails, tabs, theming or D-Bus service, so read it as a
+**floor**, not a like-for-like comparison.
+
+All three launched interleaved in one session, 3 repetitions, medians:
+
+| Files | GTK4 spike | omafil (Tauri) | Nautilus |
+| --- | --- | --- | --- |
+| 1,000 | **346 ms · 32 MB** | 1045 ms · 233 MB | 986 ms · 97 MB |
+| 10,000 | **355 ms · 39 MB** | 1143 ms · 232 MB | 1055 ms · 102 MB |
+| 50,000 | **358 ms · 71 MB** | 1103 ms · 233 MB | 842 ms · 96 MB |
+
+The spike starts about 2.8x faster than Nautilus and 3x faster than omafil, on
+a third of Nautilus's memory and a seventh of omafil's.
+
+**Absolute figures drift between sessions.** Nautilus measured 560 ms in the
+run recorded above and 986 ms here under a busier machine. Only comparisons
+within a single interleaved run are meaningful; do not compare a number in this
+section against one in the section above.
+
+### Shape
+
+- **Startup is flat for the spike and for omafil**, at every folder size. Both
+  map a window before enumerating.
+- **The spike's memory scales** with the directory — 32 to 71 MB across
+  1,000 to 50,000 files — because `DirectoryList` materialises a `FileInfo` per
+  entry. Omafil's paged listing stays flat at 233 MB. The architectures cross
+  over somewhere far beyond 50,000 files.
+- **Omafil's 233 MB is WebKit**, not the application: it does not move between
+  1,000 and 50,000 files.
+
+### Reading
+
+A GTK4 port clears Nautilus on both metrics with room to spare. The gap the
+port would actually recover is the WebKit floor; the features the spike lacks
+would cost tens of megabytes in GTK, not hundreds. A realistic ported omafil
+landing near 400-500 ms and 100-150 MB would still beat Nautilus.
+
+This does not by itself justify the port: it costs the 5,332-line Svelte UI and
+the design velocity that produced it. It establishes only that the ceiling is
+real and measured rather than estimated.

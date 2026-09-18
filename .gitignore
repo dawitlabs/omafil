@@ -28,3 +28,6 @@ output/
 
 # vite dependency cache
 .vite/
+
+# toolkit spike build output
+spike/*/target/
