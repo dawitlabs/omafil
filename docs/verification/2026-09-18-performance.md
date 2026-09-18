@@ -151,3 +151,44 @@ Nothing in these numbers suggests a ported omafil would fail to beat Nautilus.
 binary in the workspace can read them. No external API changed and the library
 suite still passes; the simpler `read_directory_listing` and
 `read_directory_page` wrappers remain `#[cfg(test)]`.
+
+## GTK4 slice two: navigation, selection, context menu
+
+Adds breadcrumbs from `listing::path_crumbs`, Back/Up with history, folder
+activation on Enter and double click, multi-selection with a live count, a
+right-click menu, and a rename dialog backed by `operations::rename_entry`.
+That pulls omafil's whole I/O chain into the binary — `operation_io`,
+`recycle`, and the `rustix`, `tempfile` and `trash` crates. Destructive actions
+are deliberately not wired.
+
+| Files | GTK4 slice 2 | omafil (Tauri) | Nautilus |
+| --- | --- | --- | --- |
+| 1,000 | **686 ms · 38 MB** | 1127 ms · 233 MB | 1001 ms · 89 MB |
+| 10,000 | **596 ms · 38 MB** | 1030 ms · 234 MB | 921 ms · 105 MB |
+| 50,000 | **695 ms · 38 MB** | 1081 ms · 233 MB | 835 ms · 97 MB |
+
+### Cost of each slice
+
+| | Startup | Memory | Binary |
+| --- | --- | --- | --- |
+| Bare list | ~350 ms | 32-71 MB | 328 KB |
+| + real listing and theme | ~500 ms | 37 MB | 444 KB |
+| + navigation, selection, menus, I/O chain | ~660 ms | 38 MB | 528 KB |
+
+**Features cost startup, not memory.** The second slice added navigation,
+selection, a context menu, a dialog and four crates for **one megabyte**, and
+memory stayed flat at 38 MB across every directory size.
+
+### The risk this exposes
+
+Startup has gone 350 to 500 to 660 ms over three slices, roughly 150 ms each,
+while Nautilus sits at 835-1000 ms in the same run. Search, thumbnails, tabs,
+split panes, the inspector, drives, drag and drop, undo and the D-Bus service
+are all still missing. At 150 ms per subsystem the startup lead would be gone
+before the port is feature-complete.
+
+**The memory conclusion is robust; the startup conclusion is not yet.** 38 MB
+against Nautilus's ~97 MB has enormous headroom. A 200 ms lead does not. The
+next slice should be whichever subsystem is most likely to be expensive at
+startup — the D-Bus service and drive enumeration are the candidates — to learn
+whether the curve flattens or keeps climbing.

@@ -1,10 +1,11 @@
-//! Toolkit spike, vertical slice: omafil's real listing and theme code behind a
-//! GTK4 file list. The backend modules are compiled from `src-tauri/src`
-//! directly rather than copied, so this measures the code that would actually
-//! ship, not a reimplementation of it.
+//! Toolkit spike, second slice: navigation, selection and a context menu on top
+//! of omafil's real backend. The backend modules are compiled from
+//! `src-tauri/src` directly rather than copied, so this exercises the code that
+//! would actually ship.
 //!
-//! Still missing everything else: operations, search, thumbnails, tabs, split
-//! panes, inspector, drives, D-Bus. Read it as a realistic floor.
+//! Still missing: search, thumbnails, tabs, split panes, the inspector, drives,
+//! drag and drop, undo and the D-Bus service. Destructive operations are
+//! deliberately not wired: a spike should not be able to delete anything.
 #[path = "../../../src-tauri/src/error.rs"]
 mod error;
 #[path = "../../../src-tauri/src/user_dirs.rs"]
@@ -19,9 +20,18 @@ mod listing;
 mod watcher;
 #[path = "../../../src-tauri/src/omarchy.rs"]
 mod omarchy;
+#[path = "../../../src-tauri/src/launch.rs"]
+mod launch;
+#[path = "../../../src-tauri/src/recycle.rs"]
+mod recycle;
+#[path = "../../../src-tauri/src/operation_io.rs"]
+mod operation_io;
+#[path = "../../../src-tauri/src/operations.rs"]
+mod operations;
 
 use gtk4::{gio, glib, prelude::*, subclass::prelude::*};
 use listing::{DirectoryEntry, DirectoryEntryType, EntrySort};
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 mod row {
     use super::*;
@@ -30,6 +40,7 @@ mod row {
     #[derive(Default)]
     pub struct Inner {
         pub name: RefCell<String>,
+        pub path: RefCell<String>,
         pub size: RefCell<String>,
         pub modified: RefCell<String>,
         pub is_directory: Cell<bool>,
@@ -54,10 +65,19 @@ impl Row {
         let inner = object.imp();
         let is_directory = entry.entry_type == DirectoryEntryType::Directory;
         inner.name.replace(entry.name.clone());
+        inner.path.replace(entry.path.clone());
         inner.is_directory.set(is_directory);
         inner.size.replace(if is_directory { String::new() } else { format_bytes(entry.size) });
         inner.modified.replace(entry.modified.map(format_modified).unwrap_or_default());
         object
+    }
+
+    fn path(&self) -> String {
+        self.imp().path.borrow().clone()
+    }
+
+    fn is_directory(&self) -> bool {
+        self.imp().is_directory.get()
     }
 }
 
@@ -79,15 +99,15 @@ fn format_modified(seconds: i64) -> String {
         .unwrap_or_default()
 }
 
-/// Omarchy's palette applied as GTK CSS. The webview build does the same thing
-/// with custom properties; GTK takes named colours the same way.
+/// Omarchy's palette as GTK CSS. The webview build does this with custom
+/// properties; GTK takes named colours the same way.
 fn apply_theme() {
     let Some(colors) = omarchy::read_theme() else { return };
     let pick = |key: &str, fallback: &str| colors.get(key).cloned().unwrap_or_else(|| fallback.to_owned());
     let css = format!(
-        "window, listview {{ background: {background}; color: {foreground}; }}
+        "window, listview, headerbar {{ background: {background}; color: {foreground}; }}
          columnview listview > row:selected {{ background: {accent}; }}
-         columnview header button {{ background: {background}; color: {foreground}; }}
+         .crumb {{ padding: 2px 6px; background: transparent; border: 0; color: {foreground}; }}
          .cell {{ padding: 4px 8px; }}",
         background = pick("background", "#101010"),
         foreground = pick("foreground", "#e8e8e8"),
@@ -98,6 +118,64 @@ fn apply_theme() {
     if let Some(display) = gtk4::gdk::Display::default() {
         gtk4::style_context_add_provider_for_display(&display, &provider, gtk4::STYLE_PROVIDER_PRIORITY_APPLICATION);
     }
+}
+
+struct App {
+    folder: RefCell<PathBuf>,
+    history: RefCell<Vec<PathBuf>>,
+    store: gio::ListStore,
+    selection: gtk4::MultiSelection,
+    crumbs: gtk4::Box,
+    status: gtk4::Label,
+    back: gtk4::Button,
+}
+
+impl App {
+    fn selected_rows(&self) -> Vec<Row> {
+        let bitset = self.selection.selection();
+        (0..bitset.size())
+            .filter_map(|index| self.selection.item(bitset.nth(index as u32)))
+            .filter_map(|item| item.downcast::<Row>().ok())
+            .collect()
+    }
+}
+
+fn navigate(app: &Rc<App>, target: PathBuf, remember: bool) {
+    let listed = listing::read_directory_listing_revealing(
+        target.to_string_lossy().into_owned(),
+        EntrySort::Name, false, false, 0, listing::MAX_PAGE_SIZE, "", &[],
+    );
+    let Ok(listing) = listed else {
+        app.status.set_text(&format!("{} could not be read.", target.display()));
+        return;
+    };
+
+    if remember {
+        app.history.borrow_mut().push(app.folder.borrow().clone());
+    }
+    app.folder.replace(target.clone());
+    app.store.remove_all();
+    for entry in &listing.entries {
+        app.store.append(&Row::new(entry));
+    }
+
+    while let Some(child) = app.crumbs.first_child() {
+        app.crumbs.remove(&child);
+    }
+    for crumb in listing::path_crumbs(&target, &paths::navigable_roots()) {
+        let button = gtk4::Button::builder().label(&crumb.name).css_classes(["crumb"]).has_frame(false).build();
+        let destination = PathBuf::from(&crumb.path);
+        let navigating = Rc::clone(app);
+        button.connect_clicked(move |_| navigate(&navigating, destination.clone(), true));
+        app.crumbs.append(&button);
+    }
+
+    app.back.set_sensitive(!app.history.borrow().is_empty());
+    app.status.set_text(&format!(
+        "{} items{}",
+        listing.total,
+        if listing.has_more { ", showing the first page" } else { "" }
+    ));
 }
 
 fn text_column(title: &str, expand: bool, read: fn(&Row) -> String) -> gtk4::ColumnViewColumn {
@@ -117,61 +195,186 @@ fn text_column(title: &str, expand: bool, read: fn(&Row) -> String) -> gtk4::Col
     column
 }
 
-fn build_view(folder: &std::path::Path) -> gtk4::Widget {
-    let store = gio::ListStore::new::<Row>();
-    // The same entry point the Tauri command calls; the simpler wrappers beside
-    // it are test-only.
-    let listed = listing::read_directory_listing_revealing(
-        folder.to_string_lossy().into_owned(),
-        EntrySort::Name,
-        false,
-        false,
-        0,
-        listing::MAX_PAGE_SIZE,
-        "",
-        &[],
-    );
-    match listed {
-        Ok(listing) => {
-            for entry in &listing.entries {
-                store.append(&Row::new(entry));
+fn ask_for_name(parent: &gtk4::ApplicationWindow, current: &str, on_accept: impl Fn(String) + 'static) {
+    let entry = gtk4::Entry::builder().text(current).activates_default(true).build();
+    let dialog = gtk4::Window::builder()
+        .transient_for(parent).modal(true).title("Rename").default_width(360).build();
+    let confirm = gtk4::Button::builder().label("Rename").build();
+    let buttons = gtk4::Box::new(gtk4::Orientation::Horizontal, 8);
+    let cancel = gtk4::Button::builder().label("Cancel").build();
+    buttons.append(&cancel);
+    buttons.append(&confirm);
+    let content = gtk4::Box::builder().orientation(gtk4::Orientation::Vertical).spacing(12).margin_top(12)
+        .margin_bottom(12).margin_start(12).margin_end(12).build();
+    content.append(&entry);
+    content.append(&buttons);
+    dialog.set_child(Some(&content));
+
+    let closing = dialog.clone();
+    cancel.connect_clicked(move |_| closing.close());
+    let closing = dialog.clone();
+    confirm.connect_clicked(move |_| {
+        let name = entry.text().to_string();
+        if !name.trim().is_empty() {
+            on_accept(name);
+        }
+        closing.close();
+    });
+    dialog.present();
+}
+
+fn install_actions(app: &Rc<App>, window: &gtk4::ApplicationWindow) {
+    let actions = gio::SimpleActionGroup::new();
+
+    let open = gio::SimpleAction::new("open", None);
+    let state = Rc::clone(app);
+    open.connect_activate(move |_, _| {
+        if let Some(row) = state.selected_rows().first() {
+            if row.is_directory() {
+                navigate(&state, PathBuf::from(row.path()), true);
             }
         }
-        Err(error) => {
-            let message = gtk4::Label::new(Some(&format!("{folder:?} could not be read: {error:?}")));
-            return message.upcast();
-        }
-    }
+    });
+    actions.add_action(&open);
 
-    let view = gtk4::ColumnView::new(Some(gtk4::MultiSelection::new(Some(store))));
+    let terminal = gio::SimpleAction::new("terminal", None);
+    let state = Rc::clone(app);
+    terminal.connect_activate(move |_, _| {
+        let here = state.folder.borrow().to_string_lossy().into_owned();
+        if let Err(error) = launch::open_terminal(&here) {
+            state.status.set_text(&format!("{error:?}"));
+        }
+    });
+    actions.add_action(&terminal);
+
+    let rename = gio::SimpleAction::new("rename", None);
+    let state = Rc::clone(app);
+    let parent = window.clone();
+    rename.connect_activate(move |_, _| {
+        let Some(row) = state.selected_rows().first().cloned() else { return };
+        let current = row.imp().name.borrow().clone();
+        let state = Rc::clone(&state);
+        ask_for_name(&parent, &current, move |name| {
+            match operations::rename_entry(row.path(), name) {
+                Ok(_) => {
+                    let here = state.folder.borrow().clone();
+                    navigate(&state, here, false);
+                }
+                Err(error) => state.status.set_text(&format!("{error:?}")),
+            }
+        });
+    });
+    actions.add_action(&rename);
+
+    window.insert_action_group("row", Some(&actions));
+}
+
+fn build_window(app: &gtk4::Application, folder: PathBuf) {
+    let store = gio::ListStore::new::<Row>();
+    let selection = gtk4::MultiSelection::new(Some(store.clone()));
+    let view = gtk4::ColumnView::new(Some(selection.clone()));
     view.append_column(&text_column("Name", true, |row| row.imp().name.borrow().clone()));
     view.append_column(&text_column("Size", false, |row| row.imp().size.borrow().clone()));
     view.append_column(&text_column("Modified", false, |row| row.imp().modified.borrow().clone()));
-    // Arrow keys, Home/End, shift-range and type-ahead come from ColumnView.
     view.set_enable_rubberband(true);
 
-    gtk4::ScrolledWindow::builder().vexpand(true).child(&view).build().upcast()
+    let crumbs = gtk4::Box::new(gtk4::Orientation::Horizontal, 2);
+    let status = gtk4::Label::builder().xalign(0.0).build();
+    let back = gtk4::Button::builder().label("Back").sensitive(false).build();
+    let up = gtk4::Button::builder().label("Up").build();
+
+    let state = Rc::new(App {
+        folder: RefCell::new(folder.clone()),
+        history: RefCell::new(Vec::new()),
+        store,
+        selection: selection.clone(),
+        crumbs: crumbs.clone(),
+        status: status.clone(),
+        back: back.clone(),
+    });
+
+    let navigating = Rc::clone(&state);
+    back.connect_clicked(move |_| {
+        let previous = navigating.history.borrow_mut().pop();
+        if let Some(previous) = previous {
+            navigate(&navigating, previous, false);
+        }
+    });
+    let navigating = Rc::clone(&state);
+    up.connect_clicked(move |_| {
+        let parent = navigating.folder.borrow().parent().map(Path::to_path_buf);
+        if let Some(parent) = parent {
+            navigate(&navigating, parent, true);
+        }
+    });
+
+    // Enter and double click both land here.
+    let navigating = Rc::clone(&state);
+    view.connect_activate(move |view, position| {
+        let Some(row) = view.model().and_then(|model| model.item(position)).and_downcast::<Row>() else { return };
+        if row.is_directory() {
+            navigate(&navigating, PathBuf::from(row.path()), true);
+        }
+    });
+
+    let counting = Rc::clone(&state);
+    selection.connect_selection_changed(move |selection, _, _| {
+        let chosen = selection.selection().size();
+        if chosen > 0 {
+            counting.status.set_text(&format!("{chosen} selected"));
+        }
+    });
+
+    let menu = gio::Menu::new();
+    menu.append(Some("Open"), Some("row.open"));
+    menu.append(Some("Rename"), Some("row.rename"));
+    menu.append(Some("Open Terminal Here"), Some("row.terminal"));
+    let popover = gtk4::PopoverMenu::from_model(Some(&menu));
+    popover.set_has_arrow(false);
+    popover.set_parent(&view);
+
+    let gesture = gtk4::GestureClick::new();
+    gesture.set_button(gtk4::gdk::BUTTON_SECONDARY);
+    let showing = popover.clone();
+    gesture.connect_pressed(move |_, _, x, y| {
+        showing.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+        showing.popup();
+    });
+    view.add_controller(gesture);
+
+    let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+    header.set_margin_top(6);
+    header.set_margin_start(6);
+    header.set_margin_end(6);
+    header.append(&back);
+    header.append(&up);
+    header.append(&crumbs);
+
+    let layout = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
+    layout.append(&header);
+    layout.append(&gtk4::ScrolledWindow::builder().vexpand(true).child(&view).build());
+    status.set_margin_start(8);
+    status.set_margin_bottom(6);
+    layout.append(&status);
+
+    let window = gtk4::ApplicationWindow::builder()
+        .application(app).title("omafil").default_width(1200).default_height(840).child(&layout).build();
+    install_actions(&state, &window);
+    navigate(&state, folder, false);
+    window.present();
 }
+
+use std::path::Path;
 
 fn main() -> glib::ExitCode {
     let requested = std::env::args().nth(1);
-    let app = gtk4::Application::builder().application_id("dev.omafil.SpikeGtk4").build();
+    let application = gtk4::Application::builder().application_id("dev.omafil.SpikeGtk4").build();
 
-    app.connect_activate(move |app| {
+    application.connect_activate(move |app| {
         apply_theme();
-        let folder = requested
-            .clone()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| glib::home_dir());
-        let window = gtk4::ApplicationWindow::builder()
-            .application(app)
-            .title("omafil")
-            .default_width(1200)
-            .default_height(840)
-            .child(&build_view(&folder))
-            .build();
-        window.present();
+        let folder = requested.clone().map(PathBuf::from).unwrap_or_else(glib::home_dir);
+        build_window(app, folder);
     });
 
-    app.run_with_args::<&str>(&[])
+    application.run_with_args::<&str>(&[])
 }

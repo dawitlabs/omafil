@@ -48,8 +48,8 @@ impl EntrySort {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PathCrumb {
-    name: String,
-    path: String,
+    pub(crate) name: String,
+    pub(crate) path: String,
 }
 
 #[derive(Serialize)]
