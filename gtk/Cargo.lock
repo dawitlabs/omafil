@@ -1303,6 +1303,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "omafil-gtk"
+version = "0.2.4"
+dependencies = [
+ "gtk4",
+ "omafil-core",
+]
+
+[[package]]
 name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1636,14 +1644,6 @@ name = "smallvec"
 version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
-
-[[package]]
-name = "spike-gtk4"
-version = "0.1.0"
-dependencies = [
- "gtk4",
- "omafil-core",
-]
 
 [[package]]
 name = "stable_deref_trait"

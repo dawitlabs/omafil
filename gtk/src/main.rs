@@ -1,11 +1,8 @@
-//! Toolkit spike, second slice: navigation, selection and a context menu on top
-//! of omafil's real backend. The backend modules are compiled from
-//! `src-tauri/src` directly rather than copied, so this exercises the code that
-//! would actually ship.
+//! GTK4 front end for omafil, built on the same `omafil-core` backend as the
+//! Tauri build. See `docs/gtk-port.md` for what is ported and what is not.
 //!
-//! Still missing: search, thumbnails, tabs, split panes, the inspector, drives,
-//! drag and drop, undo and the D-Bus service. Destructive operations are
-//! deliberately not wired: a spike should not be able to delete anything.
+//! Destructive operations are not wired yet: until the undo and recycle
+//! surfaces are ported, this build cannot delete anything.
 
 use gtk4::{gio, glib, prelude::*, subclass::prelude::*};
 use omafil_core::{drives, file_manager_service, launch, listing, omarchy, operations, paths, store, watcher};

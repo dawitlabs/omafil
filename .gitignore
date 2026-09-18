@@ -32,5 +32,3 @@ output/
 # rust build output, any crate
 target/
 
-# toolkit spike build output
-spike/*/target/
