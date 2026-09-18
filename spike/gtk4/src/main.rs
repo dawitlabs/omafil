@@ -8,7 +8,7 @@
 //! deliberately not wired: a spike should not be able to delete anything.
 
 use gtk4::{gio, glib, prelude::*, subclass::prelude::*};
-use omafil_core::{drives, file_manager_service, launch, listing, omarchy, operations, paths, watcher};
+use omafil_core::{drives, file_manager_service, launch, listing, omarchy, operations, paths, store, watcher};
 use listing::{DirectoryEntry, DirectoryEntryType, EntrySort};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
@@ -86,6 +86,10 @@ fn apply_theme() {
     let css = format!(
         "window, listview, headerbar {{ background: {background}; color: {foreground}; }}
          columnview listview > row:selected {{ background: {accent}; }}
+         .brand {{ font-weight: 700; padding: 2px 6px 8px 6px; }}
+         .heading {{ font-size: 0.85em; opacity: 0.6; padding: 0 6px; }}
+         .shortcut {{ padding: 4px 6px; background: transparent; border: 0; color: {foreground}; }}
+         .shortcut--active {{ background: {accent}; }}
          .crumb {{ padding: 2px 6px; background: transparent; border: 0; color: {foreground}; }}
          .cell {{ padding: 4px 8px; }}",
         background = pick("background", "#101010"),
@@ -101,6 +105,9 @@ fn apply_theme() {
 
 struct App {
     _watchers: RefCell<Vec<Box<dyn std::any::Any>>>,
+    /// Sidebar entries by the path they open, so the current folder can be
+    /// marked without rebuilding the list.
+    shortcuts: RefCell<Vec<(PathBuf, gtk4::Button)>>,
     folder: RefCell<PathBuf>,
     history: RefCell<Vec<PathBuf>>,
     store: gio::ListStore,
@@ -150,12 +157,101 @@ fn navigate(app: &Rc<App>, target: PathBuf, remember: bool) {
         app.crumbs.append(&button);
     }
 
+    for (path, button) in app.shortcuts.borrow().iter() {
+        if *path == target {
+            button.add_css_class("shortcut--active");
+        } else {
+            button.remove_css_class("shortcut--active");
+        }
+    }
     app.back.set_sensitive(!app.history.borrow().is_empty());
     app.status.set_text(&format!(
         "{} items{}",
         listing.total,
         if listing.has_more { ", showing the first page" } else { "" }
     ));
+}
+
+fn shortcut(state: &Rc<App>, label: &str, target: PathBuf) -> gtk4::Button {
+    let button = gtk4::Button::builder().label(label).css_classes(["shortcut"]).has_frame(false).build();
+    if let Some(child) = button.child().and_downcast::<gtk4::Label>() {
+        child.set_xalign(0.0);
+    }
+    let navigating = Rc::clone(state);
+    let destination = target.clone();
+    button.connect_clicked(move |_| navigate(&navigating, destination.clone(), true));
+    state.shortcuts.borrow_mut().push((target, button.clone()));
+    button
+}
+
+fn heading(text: &str) -> gtk4::Label {
+    gtk4::Label::builder().label(text).xalign(0.0).css_classes(["heading"]).margin_top(10).build()
+}
+
+/// The sidebar omafil already shows, on the same data: XDG user directories
+/// through `user_dirs`, saved pins and tags through `store`, and removable
+/// media through `drives`. Locations the user has disabled or removed do not
+/// appear, which is `known_directory_path` failing rather than a check here.
+fn build_sidebar(state: &Rc<App>) -> gtk4::Widget {
+    const USER_DIRECTORIES: [(&str, &str); 6] = [
+        ("desktop", "Desktop"), ("downloads", "Downloads"), ("documents", "Documents"),
+        ("pictures", "Pictures"), ("videos", "Videos"), ("music", "Music"),
+    ];
+
+    let column = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+    column.set_size_request(200, -1);
+    column.set_margin_top(8);
+    column.set_margin_start(8);
+    column.set_margin_end(4);
+    column.append(&gtk4::Label::builder().label("omafil").xalign(0.0).css_classes(["brand"]).build());
+
+    if let Ok(home) = paths::current_user_home_directory() {
+        column.append(&shortcut(state, "Home", home));
+    }
+    column.append(&shortcut(state, "Filesystem", PathBuf::from("/")));
+
+    let saved = store::read_state();
+    if !saved.pins.is_empty() {
+        column.append(&heading("Pinned"));
+        for pin in &saved.pins {
+            column.append(&shortcut(state, &pin.label, PathBuf::from(&pin.path)));
+        }
+    }
+
+    column.append(&heading("Your Files"));
+    for (location, label) in USER_DIRECTORIES {
+        if let Ok(path) = paths::known_directory_path(location) {
+            column.append(&shortcut(state, label, path));
+        }
+    }
+
+    let found = drives::read_drives();
+    if !found.is_empty() {
+        column.append(&heading("Drives"));
+        for drive in &found {
+            let free = drive.available_bytes;
+            let button = shortcut(state, &drive.name, PathBuf::from(&drive.mount_point));
+            button.set_tooltip_text(Some(&format!("{} free of {}", format_bytes(free), format_bytes(drive.total_bytes))));
+            column.append(&button);
+        }
+    }
+
+    if !saved.tags.is_empty() {
+        column.append(&heading("Tags"));
+        for tag in &saved.tags {
+            let entry = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+            let dot = gtk4::Label::new(None);
+            // Tag colours come from saved state, so they are escaped before
+            // being placed in markup.
+            dot.set_markup(&format!("<span color='{}'>●</span>", glib::markup_escape_text(&tag.color)));
+            entry.append(&dot);
+            entry.append(&gtk4::Label::builder().label(&tag.label).xalign(0.0).build());
+            column.append(&entry);
+        }
+    }
+
+    gtk4::ScrolledWindow::builder()
+        .hscrollbar_policy(gtk4::PolicyType::Never).child(&column).build().upcast()
 }
 
 fn text_column(title: &str, expand: bool, read: fn(&Row) -> String) -> gtk4::ColumnViewColumn {
@@ -265,6 +361,7 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
 
     let state = Rc::new(App {
         _watchers: RefCell::new(Vec::new()),
+        shortcuts: RefCell::new(Vec::new()),
         folder: RefCell::new(folder.clone()),
         history: RefCell::new(Vec::new()),
         store,
@@ -323,20 +420,7 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
     });
     view.add_controller(gesture);
 
-    // Drives in a sidebar: read_drives shells out to lsblk and stats every
-    // mount through sysinfo, so it is the expensive half of this slice.
-    let sidebar = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
-    sidebar.set_margin_top(6);
-    sidebar.set_margin_start(6);
-    sidebar.set_size_request(180, -1);
-    sidebar.append(&gtk4::Label::builder().label("Drives").xalign(0.0).build());
-    for drive in drives::read_drives() {
-        let button = gtk4::Button::builder().label(&drive.name).css_classes(["crumb"]).has_frame(false).build();
-        let destination = PathBuf::from(&drive.mount_point);
-        let navigating = Rc::clone(&state);
-        button.connect_clicked(move |_| navigate(&navigating, destination.clone(), true));
-        sidebar.append(&button);
-    }
+    let sidebar = build_sidebar(&state);
 
     // The same watchers the Tauri build parks in application state.
     if let Some(theme_watcher) = omarchy::watch_theme(|| {}) {
