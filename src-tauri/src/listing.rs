@@ -13,11 +13,11 @@ pub(crate) const MAX_PAGE_SIZE: usize = 1_000;
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DirectoryEntry {
-    name: String,
-    path: String,
-    entry_type: DirectoryEntryType,
-    size: u64,
-    modified: Option<i64>,
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) entry_type: DirectoryEntryType,
+    pub(crate) size: u64,
+    pub(crate) modified: Option<i64>,
 }
 
 #[derive(PartialEq, Eq, Serialize)]
@@ -55,11 +55,11 @@ pub(crate) struct PathCrumb {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DirectoryListing {
-    path: String,
-    crumbs: Vec<PathCrumb>,
-    entries: Vec<DirectoryEntry>,
-    total: usize,
-    has_more: bool,
+    pub(crate) path: String,
+    pub(crate) crumbs: Vec<PathCrumb>,
+    pub(crate) entries: Vec<DirectoryEntry>,
+    pub(crate) total: usize,
+    pub(crate) has_more: bool,
 }
 
 pub(crate) fn entry_extension(name: &str) -> String {

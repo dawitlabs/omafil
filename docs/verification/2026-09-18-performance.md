@@ -109,3 +109,45 @@ landing near 400-500 ms and 100-150 MB would still beat Nautilus.
 This does not by itself justify the port: it costs the 5,332-line Svelte UI and
 the design velocity that produced it. It establishes only that the ceiling is
 real and measured rather than estimated.
+
+## GTK4 vertical slice
+
+`spike/gtk4` now compiles omafil's own `listing.rs`, `paths.rs` and `omarchy.rs`
+from `src-tauri/src` directly — via `#[path]`, not copied — behind a GTK4
+`ColumnView` with name, size and modified columns, Omarchy's `colors.toml`
+applied as GTK CSS, and ColumnView's built-in keyboard navigation. It calls
+`read_directory_listing_revealing`, the same entry point the Tauri command uses.
+
+Still missing: operations, search, thumbnails, tabs, split panes, the inspector,
+drives, context menus, drag and drop, rename, undo and the D-Bus service.
+
+| Files | GTK4 slice | omafil (Tauri) | Nautilus |
+| --- | --- | --- | --- |
+| 1,000 | **553 ms · 37 MB** | 1022 ms · 233 MB | 1035 ms · 96 MB |
+| 10,000 | **453 ms · 37 MB** | 1120 ms · 233 MB | 844 ms · 102 MB |
+| 50,000 | **521 ms · 37 MB** | 1112 ms · 233 MB | 1002 ms · 92 MB |
+
+### Reading
+
+**The real backend costs about 150 ms over the bare spike** (350 ms to ~500 ms)
+and almost nothing in memory. Theme parsing and the first listing are the
+difference.
+
+**Memory is flat at 37 MB across every directory size**, where the bare spike
+scaled 32 to 71 MB. The difference is omafil's paged listing: `MAX_PAGE_SIZE`
+entries regardless of how large the folder is. The architecture that could not
+pay off under WebKit's floor pays off immediately without it.
+
+**Against Nautilus: roughly 2x faster on about 40% of the memory**, with the
+real listing code and live theming already in place.
+
+The features still missing are GTK widgets over Rust that mostly already exists
+and is already counted here. They will add tens of megabytes, not hundreds.
+Nothing in these numbers suggests a ported omafil would fail to beat Nautilus.
+
+### Change required in the main crate
+
+`DirectoryEntry` and `DirectoryListing` fields became `pub(crate)` so a second
+binary in the workspace can read them. No external API changed and the library
+suite still passes; the simpler `read_directory_listing` and
+`read_directory_page` wrappers remain `#[cfg(test)]`.
