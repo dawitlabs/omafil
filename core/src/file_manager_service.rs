@@ -38,7 +38,7 @@ impl FileManager {
     }
 }
 
-pub(crate) fn serve(handler: Handler) -> zbus::Result<zbus::blocking::Connection> {
+pub fn serve(handler: Handler) -> zbus::Result<zbus::blocking::Connection> {
     let connection = zbus::blocking::connection::Builder::session()?
         .serve_at("/org/freedesktop/FileManager1", FileManager { handler })?
         .build()?;
@@ -51,7 +51,7 @@ pub(crate) fn serve(handler: Handler) -> zbus::Result<zbus::blocking::Connection
     Ok(connection)
 }
 
-pub(crate) fn is_default() -> bool {
+pub fn is_default() -> bool {
     std::process::Command::new("xdg-mime")
         .args(["query", "default", "inode/directory"])
         .output()

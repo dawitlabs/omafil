@@ -13,10 +13,10 @@ const PROGRAM: &str = "voxtype";
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct DictationStatus {
-    pub(crate) is_available: bool,
+pub struct DictationStatus {
+    pub is_available: bool,
     /// "idle", "recording" or "transcribing", as the daemon last wrote it.
-    pub(crate) state: String,
+    pub state: String,
 }
 
 fn state_path() -> Option<PathBuf> {
@@ -33,14 +33,14 @@ fn read_state(path: Option<&Path>) -> String {
         .unwrap_or_else(|| "idle".to_owned())
 }
 
-pub(crate) fn dictation_status() -> DictationStatus {
+pub fn dictation_status() -> DictationStatus {
     DictationStatus {
         is_available: on_path(PROGRAM),
         state: read_state(state_path().as_deref()),
     }
 }
 
-pub(crate) fn toggle_dictation() -> Result<(), DirectoryError> {
+pub fn toggle_dictation() -> Result<(), DirectoryError> {
     spawn_first(
         &[vec![PROGRAM.into(), "record".into(), "toggle".into()]],
         Path::new("/"),

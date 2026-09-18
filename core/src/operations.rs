@@ -12,7 +12,7 @@ use std::{
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum TransferConflictPolicy {
+pub enum TransferConflictPolicy {
     Fail,
     Skip,
     Replace,
@@ -21,21 +21,21 @@ pub(crate) enum TransferConflictPolicy {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct TransferConflict {
-    pub(crate) source_path: String,
-    pub(crate) destination_path: String,
-    pub(crate) name: String,
+pub struct TransferConflict {
+    pub source_path: String,
+    pub destination_path: String,
+    pub name: String,
 }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct TransferResult {
-    pub(crate) source_path: String,
-    pub(crate) destination_path: String,
-    pub(crate) skipped: bool,
+pub struct TransferResult {
+    pub source_path: String,
+    pub destination_path: String,
+    pub skipped: bool,
 }
 
-pub(crate) fn create_directory(
+pub fn create_directory(
     parent_path: String,
     name: String,
 ) -> Result<String, DirectoryError> {
@@ -51,7 +51,7 @@ pub(crate) fn create_directory(
     Ok(target.to_string_lossy().into_owned())
 }
 
-pub(crate) fn rename_entry(path: String, name: String) -> Result<String, DirectoryError> {
+pub fn rename_entry(path: String, name: String) -> Result<String, DirectoryError> {
     let source = resolve_entry_path(&path)?;
     let parent = source.parent().ok_or_else(DirectoryError::unavailable)?;
     let target = vacant_target(parent, &name)?;
@@ -62,7 +62,7 @@ pub(crate) fn rename_entry(path: String, name: String) -> Result<String, Directo
 }
 
 /// Returns the trash ids of what it removed, which is what restoring them later needs.
-pub(crate) fn delete_entries(paths: Vec<String>) -> Result<Vec<String>, DirectoryError> {
+pub fn delete_entries(paths: Vec<String>) -> Result<Vec<String>, DirectoryError> {
     let resolved = paths
         .iter()
         .map(|path| resolve_entry_path(path))
@@ -77,7 +77,7 @@ pub(crate) fn delete_entries(paths: Vec<String>) -> Result<Vec<String>, Director
         .collect())
 }
 
-pub(crate) fn transfer_entries(
+pub fn transfer_entries(
     paths: Vec<String>,
     destination_path: String,
     is_move: bool,
@@ -97,7 +97,7 @@ pub(crate) fn transfer_entries(
 }
 
 /// Completed results survive a later failure/cancellation and are sent to the UI.
-pub(crate) fn transfer_with_context(
+pub fn transfer_with_context(
     paths: Vec<String>,
     destination_path: String,
     is_move: bool,
@@ -219,7 +219,7 @@ fn renamed_target(destination: &Path, name: &str) -> Result<PathBuf, DirectoryEr
     Err(DirectoryError::operation_failed())
 }
 
-pub(crate) fn permanently_delete_entries(paths: Vec<String>) -> Result<(), DirectoryError> {
+pub fn permanently_delete_entries(paths: Vec<String>) -> Result<(), DirectoryError> {
     for path in paths {
         let target = resolve_entry_path(&path)?;
         let metadata = target
@@ -236,7 +236,7 @@ pub(crate) fn permanently_delete_entries(paths: Vec<String>) -> Result<(), Direc
     Ok(())
 }
 
-pub(crate) fn find_transfer_conflicts(
+pub fn find_transfer_conflicts(
     paths: Vec<String>,
     destination_path: String,
 ) -> Result<Vec<TransferConflict>, DirectoryError> {

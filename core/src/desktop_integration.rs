@@ -11,7 +11,7 @@ const OWN_DEFAULT: &str = "omafil.desktop;";
 const SERVICE: &str = "org.freedesktop.FileManager1.service";
 
 #[derive(Clone)]
-pub(crate) struct IntegrationPaths {
+pub struct IntegrationPaths {
     config: PathBuf,
     data: PathBuf,
     desktop: String,
@@ -28,7 +28,7 @@ struct Registration {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct IntegrationStatus {
+pub struct IntegrationStatus {
     pub is_default: bool,
     pub can_enable: bool,
     pub can_restore: bool,
@@ -273,7 +273,7 @@ fn lock(paths: &IntegrationPaths) -> Result<fs::File, String> {
     Ok(file)
 }
 
-pub(crate) fn enable() -> Result<(), String> {
+pub fn enable() -> Result<(), String> {
     let paths = IntegrationPaths::current()?;
     let executable = installed_executable(&paths)?;
     enable_at(&paths, &executable)
@@ -323,7 +323,7 @@ fn enable_at(paths: &IntegrationPaths, executable: &Path) -> Result<(), String> 
     Ok(())
 }
 
-pub(crate) fn restore() -> Result<(), String> {
+pub fn restore() -> Result<(), String> {
     let paths = IntegrationPaths::current()?;
     let _lock = lock(&paths)?;
     let saved = paths
@@ -349,7 +349,7 @@ fn restore_at_locked(paths: &IntegrationPaths, saved: &Registration) -> Result<(
     restore_file(&paths.manifest(), None)
 }
 
-pub(crate) fn status() -> Result<IntegrationStatus, String> {
+pub fn status() -> Result<IntegrationStatus, String> {
     let paths = IntegrationPaths::current()?;
     let installed = installed_executable(&paths);
     let saved = paths.registered()?;

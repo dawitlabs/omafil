@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub(crate) fn resolve(location: &str, home: &Path) -> Result<PathBuf, DirectoryError> {
+pub fn resolve(location: &str, home: &Path) -> Result<PathBuf, DirectoryError> {
     let config = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .filter(|path| path.is_absolute())

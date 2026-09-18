@@ -71,10 +71,10 @@ fn matches_filter(filter: &SearchFilter, name: &str, size: u64) -> bool {
 }
 
 #[derive(Default)]
-pub(crate) struct SearchGeneration(Arc<AtomicU64>);
+pub struct SearchGeneration(Arc<AtomicU64>);
 
 impl SearchGeneration {
-    pub(crate) fn begin(&self) -> (Arc<AtomicU64>, u64) {
+    pub fn begin(&self) -> (Arc<AtomicU64>, u64) {
         let current = Arc::clone(&self.0);
         let generation = current.fetch_add(1, Ordering::SeqCst) + 1;
 
@@ -84,15 +84,15 @@ impl SearchGeneration {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct SearchResults {
-    pub(crate) entries: Vec<DirectoryEntry>,
-    pub(crate) truncated: bool,
-    pub(crate) skipped: usize,
+pub struct SearchResults {
+    pub entries: Vec<DirectoryEntry>,
+    pub truncated: bool,
+    pub skipped: usize,
 }
 
 /// Case-insensitive glob over a single name. Supports `*` and `?` only, which
 /// is what a file manager's search box is asked for in practice.
-pub(crate) fn matches_glob(pattern: &str, name: &str) -> bool {
+pub fn matches_glob(pattern: &str, name: &str) -> bool {
     let pattern: Vec<char> = pattern.chars().collect();
     let name: Vec<char> = name.chars().collect();
     let (mut p, mut n) = (0, 0);
@@ -126,7 +126,7 @@ fn is_subsequence(query: &str, name: &str) -> bool {
 }
 
 /// Higher is a better match. `None` means the name does not match at all.
-pub(crate) fn match_score(query: &str, name: &str) -> Option<u32> {
+pub fn match_score(query: &str, name: &str) -> Option<u32> {
     let stem = name.rsplit_once('.').map_or(name, |(stem, _)| stem);
 
     if name == query {
@@ -157,7 +157,7 @@ pub(crate) fn match_score(query: &str, name: &str) -> Option<u32> {
     None
 }
 
-pub(crate) fn search_directory(
+pub fn search_directory(
     path: String,
     query: String,
     show_hidden: bool,
@@ -171,7 +171,7 @@ pub(crate) fn search_directory(
     Ok(walk_matches(root, &query, show_hidden, generation, current))
 }
 
-pub(crate) fn walk_matches(
+pub fn walk_matches(
     root: PathBuf,
     query: &str,
     show_hidden: bool,

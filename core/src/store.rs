@@ -4,39 +4,39 @@ use std::{collections::BTreeMap, fs, path::PathBuf};
 
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
-pub(crate) struct AppState {
-    pub(crate) pins: Vec<PinnedLocation>,
-    pub(crate) tags: Vec<Tag>,
-    pub(crate) tagged: BTreeMap<String, Vec<String>>,
-    pub(crate) settings: Settings,
+pub struct AppState {
+    pub pins: Vec<PinnedLocation>,
+    pub tags: Vec<Tag>,
+    pub tagged: BTreeMap<String, Vec<String>>,
+    pub settings: Settings,
 }
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct PinnedLocation {
-    pub(crate) path: String,
-    pub(crate) label: String,
+pub struct PinnedLocation {
+    pub path: String,
+    pub label: String,
 }
 
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct Tag {
-    pub(crate) id: String,
-    pub(crate) label: String,
-    pub(crate) color: String,
+pub struct Tag {
+    pub id: String,
+    pub label: String,
+    pub color: String,
 }
 
 #[derive(Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
-pub(crate) struct Settings {
+pub struct Settings {
     #[serde(deserialize_with = "deserialize_server_uris")]
-    pub(crate) server_uris: Vec<String>,
-    pub(crate) font_scale: u16,
-    pub(crate) show_hidden: bool,
-    pub(crate) theme: String,
-    pub(crate) default_sort: String,
-    pub(crate) default_descending: bool,
-    pub(crate) vim_keys: bool,
+    pub server_uris: Vec<String>,
+    pub font_scale: u16,
+    pub show_hidden: bool,
+    pub theme: String,
+    pub default_sort: String,
+    pub default_descending: bool,
+    pub vim_keys: bool,
 }
 
 fn safe_server_uri(uri: &str) -> bool {
@@ -87,13 +87,13 @@ impl Default for Settings {
 }
 
 #[derive(Serialize)]
-pub(crate) struct StoreError {
+pub struct StoreError {
     code: &'static str,
     message: &'static str,
 }
 
 impl StoreError {
-    pub(crate) const fn write_failed() -> Self {
+    pub const fn write_failed() -> Self {
         Self {
             code: "state_write_failed",
             message: "Unable to save your pins, tags and settings.",
@@ -113,7 +113,7 @@ fn state_directory() -> Option<PathBuf> {
         .map(|config| config.join("omafil"))
 }
 
-pub(crate) fn read_state() -> AppState {
+pub fn read_state() -> AppState {
     state_directory()
         .map(|directory| directory.join("state.json"))
         .and_then(|path| fs::read_to_string(path).ok())
@@ -121,7 +121,7 @@ pub(crate) fn read_state() -> AppState {
         .unwrap_or_default()
 }
 
-pub(crate) fn write_state(mut state: AppState) -> Result<(), StoreError> {
+pub fn write_state(mut state: AppState) -> Result<(), StoreError> {
     state
         .settings
         .server_uris

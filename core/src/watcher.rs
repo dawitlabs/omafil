@@ -20,14 +20,14 @@ fn changes_directory_contents(event: &Event) -> bool {
 }
 
 #[derive(Default)]
-pub(crate) struct DirectoryWatcher {
+pub struct DirectoryWatcher {
     active: Mutex<HashMap<String, RecommendedWatcher>>,
 }
 
 impl DirectoryWatcher {
     /// Makes the watched set equal to `paths`: dropped watchers end their
     /// threads, folders already watched are left alone.
-    pub(crate) fn sync<F>(&self, paths: &[String], on_change: F) -> Result<(), DirectoryError>
+    pub fn sync<F>(&self, paths: &[String], on_change: F) -> Result<(), DirectoryError>
     where
         F: Fn(String) + Send + Clone + 'static,
     {
@@ -49,14 +49,14 @@ impl DirectoryWatcher {
         Ok(())
     }
 
-    pub(crate) fn stop(&self) {
+    pub fn stop(&self) {
         if let Ok(mut active) = self.active.lock() {
             active.clear();
         }
     }
 }
 
-pub(crate) fn start_watch<F>(directory: PathBuf, on_change: F) -> notify::Result<RecommendedWatcher>
+pub fn start_watch<F>(directory: PathBuf, on_change: F) -> notify::Result<RecommendedWatcher>
 where
     F: Fn(String) + Send + 'static,
 {

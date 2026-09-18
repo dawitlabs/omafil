@@ -1,0 +1,20 @@
+[package]
+name = "omafil-core"
+version = "0.2.4"
+description = "Filesystem, desktop and Omarchy integration for omafil, independent of any UI toolkit"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "=0.10.9"
+md-5 = "0.10.6"
+sysinfo = "=0.38.0"
+quick-xml = "0.41.0"
+url = "2.5.8"
+trash = "5.2.7"
+notify = "8.2.0"
+zip = "4.0.0"
+tempfile = "3.27.0"
+rustix = { version = "1.1.4", features = ["fs"] }
+zbus = "5.19.0"

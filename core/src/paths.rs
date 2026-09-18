@@ -1,14 +1,14 @@
 use crate::error::DirectoryError;
 use std::path::{Path, PathBuf};
 
-pub(crate) fn is_supported_location(location: &str) -> bool {
+pub fn is_supported_location(location: &str) -> bool {
     matches!(
         location,
         "home" | "desktop" | "documents" | "downloads" | "pictures" | "videos" | "music"
     )
 }
 
-pub(crate) fn current_user_home_directory() -> Result<PathBuf, DirectoryError> {
+pub fn current_user_home_directory() -> Result<PathBuf, DirectoryError> {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
@@ -16,7 +16,7 @@ pub(crate) fn current_user_home_directory() -> Result<PathBuf, DirectoryError> {
         .ok_or_else(DirectoryError::unavailable)
 }
 
-pub(crate) fn known_directory_path(location: &str) -> Result<PathBuf, DirectoryError> {
+pub fn known_directory_path(location: &str) -> Result<PathBuf, DirectoryError> {
     if !is_supported_location(location) {
         return Err(DirectoryError::unavailable());
     }
@@ -28,18 +28,18 @@ pub(crate) fn known_directory_path(location: &str) -> Result<PathBuf, DirectoryE
     crate::user_dirs::resolve(location, &home_directory)
 }
 
-pub(crate) fn navigable_roots() -> Vec<PathBuf> {
+pub fn navigable_roots() -> Vec<PathBuf> {
     vec![PathBuf::from("/")]
 }
 
 /// Normal OS permissions govern access, including outside home and mounted drives.
 /// Entry mutations use `resolve_entry_path` to preserve the final symlink.
-pub(crate) fn resolve_navigable_path(path: &str) -> Result<PathBuf, DirectoryError> {
+pub fn resolve_navigable_path(path: &str) -> Result<PathBuf, DirectoryError> {
     Path::new(path).canonicalize().map_err(DirectoryError::from)
 }
 
 /// Resolve the parent, preserving the final entry (including dangling symlinks).
-pub(crate) fn resolve_entry_path(path: &str) -> Result<PathBuf, DirectoryError> {
+pub fn resolve_entry_path(path: &str) -> Result<PathBuf, DirectoryError> {
     let path = Path::new(path);
     let name = path.file_name().ok_or_else(DirectoryError::unavailable)?;
     let parent = path.parent().ok_or_else(DirectoryError::unavailable)?;
@@ -51,14 +51,14 @@ pub(crate) fn resolve_entry_path(path: &str) -> Result<PathBuf, DirectoryError> 
     Ok(entry)
 }
 
-pub(crate) fn display_name(directory: &Path) -> String {
+pub fn display_name(directory: &Path) -> String {
     directory
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_else(|| directory.to_string_lossy().into_owned())
 }
 
-pub(crate) fn validate_entry_name(name: &str) -> Result<&str, DirectoryError> {
+pub fn validate_entry_name(name: &str) -> Result<&str, DirectoryError> {
     let name = name.trim();
     let is_reserved = name.is_empty() || name == "." || name == "..";
     let has_separator = name.contains('/') || name.contains('\\') || name.contains('\0');
@@ -70,7 +70,7 @@ pub(crate) fn validate_entry_name(name: &str) -> Result<&str, DirectoryError> {
     Ok(name)
 }
 
-pub(crate) fn vacant_target(directory: &Path, name: &str) -> Result<PathBuf, DirectoryError> {
+pub fn vacant_target(directory: &Path, name: &str) -> Result<PathBuf, DirectoryError> {
     let target = directory.join(validate_entry_name(name)?);
 
     if target.symlink_metadata().is_ok() {

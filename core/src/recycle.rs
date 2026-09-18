@@ -4,14 +4,14 @@ use trash::os_limited::{list, purge_all, restore_all};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RecycleItem {
-    pub(crate) id: String,
-    pub(crate) name: String,
-    pub(crate) original_path: String,
-    pub(crate) deleted_at: i64,
+pub struct RecycleItem {
+    pub id: String,
+    pub name: String,
+    pub original_path: String,
+    pub deleted_at: i64,
 }
 
-pub(crate) fn list_recycle_bin() -> Result<Vec<RecycleItem>, DirectoryError> {
+pub fn list_recycle_bin() -> Result<Vec<RecycleItem>, DirectoryError> {
     let mut items = list()
         .map_err(|_| DirectoryError::unavailable())?
         .into_iter()
@@ -28,7 +28,7 @@ pub(crate) fn list_recycle_bin() -> Result<Vec<RecycleItem>, DirectoryError> {
 }
 
 /// The ids currently in the trash, used to tell apart what a delete just added.
-pub(crate) fn recycle_item_ids() -> Result<std::collections::HashSet<String>, DirectoryError> {
+pub fn recycle_item_ids() -> Result<std::collections::HashSet<String>, DirectoryError> {
     Ok(list()
         .map_err(|_| DirectoryError::unavailable())?
         .into_iter()
@@ -49,11 +49,11 @@ fn selected(ids: &[String]) -> Result<Vec<trash::TrashItem>, DirectoryError> {
         .ok_or_else(DirectoryError::unavailable)
 }
 
-pub(crate) fn restore_recycle_items(ids: Vec<String>) -> Result<(), DirectoryError> {
+pub fn restore_recycle_items(ids: Vec<String>) -> Result<(), DirectoryError> {
     restore_all(selected(&ids)?).map_err(|_| DirectoryError::operation_failed())
 }
 
-pub(crate) fn empty_recycle_bin() -> Result<(), DirectoryError> {
+pub fn empty_recycle_bin() -> Result<(), DirectoryError> {
     let items = list().map_err(|_| DirectoryError::unavailable())?;
     purge_all(items).map_err(|_| DirectoryError::operation_failed())
 }

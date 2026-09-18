@@ -13,7 +13,7 @@ const NAMES: &[&str] = &[
 const SIZES: &[&str] = &["48x48", "64x64", "32x32", "128x128", "256x256", "24x24", "22x22", "16x16", "scalable"];
 const CATEGORIES: &[&str] = &["places", "mimetypes"];
 
-pub(crate) fn current_theme_name() -> Option<String> {
+pub fn current_theme_name() -> Option<String> {
     let home = std::env::var_os("HOME").map(PathBuf::from)?;
     let name = fs::read_to_string(home.join(".local/state/omarchy/current/theme/icons.theme")).ok()?;
     let name = name.trim();
@@ -101,7 +101,7 @@ fn resolve_all(name: &str, bases: &[PathBuf]) -> HashMap<String, String> {
         .collect()
 }
 
-pub(crate) fn theme_icons() -> Option<HashMap<String, String>> {
+pub fn theme_icons() -> Option<HashMap<String, String>> {
     let name = current_theme_name()?;
     let icons = resolve_all(&name, &icon_bases());
 

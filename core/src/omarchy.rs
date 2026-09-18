@@ -7,11 +7,11 @@ fn current_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state/omarchy/current"))
 }
 
-pub(crate) type ThemeColors = HashMap<String, String>;
+pub type ThemeColors = HashMap<String, String>;
 
 /// colors.toml is a flat list of `key = "value"` lines, so a full TOML parser
 /// is not needed.
-pub(crate) fn parse_colors(source: &str) -> ThemeColors {
+pub fn parse_colors(source: &str) -> ThemeColors {
     source
         .lines()
         .filter_map(|line| {
@@ -27,16 +27,16 @@ pub(crate) fn parse_colors(source: &str) -> ThemeColors {
         .collect()
 }
 
-pub(crate) fn read_theme() -> Option<ThemeColors> {
+pub fn read_theme() -> Option<ThemeColors> {
     let source = fs::read_to_string(current_dir()?.join("theme/colors.toml")).ok()?;
     let colors = parse_colors(&source);
 
     colors.contains_key("background").then_some(colors)
 }
 
-pub(crate) struct ThemeWatcher(#[allow(dead_code)] RecommendedWatcher);
+pub struct ThemeWatcher(#[allow(dead_code)] RecommendedWatcher);
 
-pub(crate) fn watch_theme<F>(on_change: F) -> Option<ThemeWatcher>
+pub fn watch_theme<F>(on_change: F) -> Option<ThemeWatcher>
 where
     F: Fn() + Send + 'static,
 {

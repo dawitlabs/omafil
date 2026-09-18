@@ -14,22 +14,22 @@ const CHUNK_SIZE: usize = 256 * 1024;
 
 #[derive(Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct OperationProgress {
-    pub(crate) completed_bytes: u64,
-    pub(crate) completed_items: usize,
-    pub(crate) total_bytes: Option<u64>,
-    pub(crate) current_name: Option<String>,
+pub struct OperationProgress {
+    pub completed_bytes: u64,
+    pub completed_items: usize,
+    pub total_bytes: Option<u64>,
+    pub current_name: Option<String>,
 }
 
-pub(crate) struct OperationContext<'a> {
+pub struct OperationContext<'a> {
     cancellation: &'a AtomicBool,
     notify: Box<dyn FnMut(&OperationProgress) + 'a>,
-    pub(crate) progress: OperationProgress,
+    pub progress: OperationProgress,
     last_emit: Instant,
 }
 
 impl<'a> OperationContext<'a> {
-    pub(crate) fn new(
+    pub fn new(
         cancellation: &'a AtomicBool,
         notify: impl FnMut(&OperationProgress) + 'a,
     ) -> Self {
@@ -41,7 +41,7 @@ impl<'a> OperationContext<'a> {
         }
     }
 
-    pub(crate) fn check(&self) -> Result<(), DirectoryError> {
+    pub fn check(&self) -> Result<(), DirectoryError> {
         if self.cancellation.load(Ordering::Relaxed) {
             Err(DirectoryError::cancelled())
         } else {
@@ -49,19 +49,19 @@ impl<'a> OperationContext<'a> {
         }
     }
 
-    pub(crate) fn complete_item(&mut self) {
+    pub fn complete_item(&mut self) {
         self.progress.completed_items += 1;
         if self.last_emit.elapsed() >= Duration::from_millis(100) {
             self.emit();
         }
     }
 
-    pub(crate) fn set_total(&mut self, total: u64) {
+    pub fn set_total(&mut self, total: u64) {
         self.progress.total_bytes = Some(total);
         self.emit();
     }
 
-    pub(crate) fn current(&mut self, path: &Path) {
+    pub fn current(&mut self, path: &Path) {
         self.progress.current_name = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned());
@@ -75,7 +75,7 @@ impl<'a> OperationContext<'a> {
         self.last_emit = Instant::now();
     }
 
-    pub(crate) fn advance(&mut self, bytes: u64) {
+    pub fn advance(&mut self, bytes: u64) {
         let first = bytes > 0 && self.progress.completed_bytes == 0;
         self.progress.completed_bytes = self.progress.completed_bytes.saturating_add(bytes);
         if let Some(total) = &mut self.progress.total_bytes {
@@ -86,7 +86,7 @@ impl<'a> OperationContext<'a> {
         }
     }
 
-    pub(crate) fn copy(
+    pub fn copy(
         &mut self,
         reader: &mut impl Read,
         writer: &mut impl Write,
@@ -109,7 +109,7 @@ impl<'a> OperationContext<'a> {
     }
 }
 
-pub(crate) fn measure(path: &Path, context: &OperationContext<'_>) -> Result<u64, DirectoryError> {
+pub fn measure(path: &Path, context: &OperationContext<'_>) -> Result<u64, DirectoryError> {
     context.check()?;
     let metadata = path.symlink_metadata()?;
     if metadata.is_symlink() {
@@ -130,7 +130,7 @@ pub(crate) fn measure(path: &Path, context: &OperationContext<'_>) -> Result<u64
     Ok(bytes)
 }
 
-pub(crate) fn copy_tree(
+pub fn copy_tree(
     source: &Path,
     target: &Path,
     context: &mut OperationContext<'_>,
@@ -162,17 +162,17 @@ pub(crate) fn copy_tree(
 }
 
 /// Linux atomic publication: never overwrite an item that appeared while copying.
-pub(crate) fn rename_without_replace(source: &Path, target: &Path) -> std::io::Result<()> {
+pub fn rename_without_replace(source: &Path, target: &Path) -> std::io::Result<()> {
     renameat_with(CWD, source, CWD, target, RenameFlags::NOREPLACE).map_err(Into::into)
 }
 
-pub(crate) struct StagedOutput {
+pub struct StagedOutput {
     directory: tempfile::TempDir,
-    pub(crate) path: PathBuf,
+    pub path: PathBuf,
 }
 
 impl StagedOutput {
-    pub(crate) fn new(parent: &Path) -> Result<Self, DirectoryError> {
+    pub fn new(parent: &Path) -> Result<Self, DirectoryError> {
         let directory = tempfile::Builder::new()
             .prefix(".omafil-operation-")
             .tempdir_in(parent)?;
@@ -180,7 +180,7 @@ impl StagedOutput {
         Ok(Self { directory, path })
     }
 
-    pub(crate) fn publish(
+    pub fn publish(
         self,
         target: &Path,
         replace: bool,

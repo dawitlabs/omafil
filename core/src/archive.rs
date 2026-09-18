@@ -62,7 +62,7 @@ fn add_path(
     Ok(())
 }
 
-pub(crate) fn create_zip(
+pub fn create_zip(
     paths: Vec<String>,
     destination_path: String,
     name: String,
@@ -72,7 +72,7 @@ pub(crate) fn create_zip(
     create_zip_with_context(paths, destination_path, name, &mut context)
 }
 
-pub(crate) fn create_zip_with_context(
+pub fn create_zip_with_context(
     paths: Vec<String>,
     destination_path: String,
     name: String,
@@ -127,13 +127,13 @@ fn create_at(
     Ok(target)
 }
 
-pub(crate) fn extract_zip(path: String, destination_path: String) -> Result<(), DirectoryError> {
+pub fn extract_zip(path: String, destination_path: String) -> Result<(), DirectoryError> {
     let cancel = AtomicBool::new(false);
     let mut context = OperationContext::new(&cancel, |_| {});
     extract_zip_with_context(path, destination_path, &mut context)
 }
 
-pub(crate) fn extract_zip_with_context(
+pub fn extract_zip_with_context(
     path: String,
     destination_path: String,
     context: &mut OperationContext<'_>,
@@ -159,7 +159,7 @@ const EXTRACTABLE_EXTENSIONS: [&str; 17] = [
     "7z", "iso", "cab", "rar",
 ];
 
-pub(crate) fn is_extractable(name: &str) -> bool {
+pub fn is_extractable(name: &str) -> bool {
     let Some((_, extension)) = name.rsplit_once('.') else {
         return false;
     };

@@ -8,7 +8,7 @@ use std::{
 };
 
 /// True when a bare program name resolves on PATH.
-pub(crate) fn on_path(program: &str) -> bool {
+pub fn on_path(program: &str) -> bool {
     std::env::var_os("PATH").is_some_and(|paths| {
         std::env::split_paths(&paths).any(|dir| dir.join(program).is_file())
     })
@@ -16,7 +16,7 @@ pub(crate) fn on_path(program: &str) -> bool {
 
 /// Runs the first candidate that exists on PATH. A child that fails after
 /// starting reports through its own UI, so only a missing program moves on.
-pub(crate) fn spawn_first(candidates: &[Vec<String>], cwd: &Path, failure: &str) -> Result<(), DirectoryError> {
+pub fn spawn_first(candidates: &[Vec<String>], cwd: &Path, failure: &str) -> Result<(), DirectoryError> {
     for argv in candidates {
         let Some((program, args)) = argv.split_first() else { continue };
         let spawned = Command::new(program)
@@ -51,7 +51,7 @@ fn containing_directory(target: PathBuf) -> Result<PathBuf, DirectoryError> {
     target.parent().map(Path::to_path_buf).ok_or_else(DirectoryError::unavailable)
 }
 
-pub(crate) fn open_terminal(path: &str) -> Result<(), DirectoryError> {
+pub fn open_terminal(path: &str) -> Result<(), DirectoryError> {
     let directory = containing_directory(resolve_navigable_path(path)?)?;
     let dir_flag = format!("--dir={}", directory.display());
     let mut candidates = vec![
@@ -66,7 +66,7 @@ pub(crate) fn open_terminal(path: &str) -> Result<(), DirectoryError> {
     spawn_first(&candidates, &directory, "No terminal is available to open here.")
 }
 
-pub(crate) fn open_editor(path: &str) -> Result<(), DirectoryError> {
+pub fn open_editor(path: &str) -> Result<(), DirectoryError> {
     let target = resolve_navigable_path(path)?;
     let file = target.to_string_lossy().into_owned();
     let directory = containing_directory(target)?;

@@ -2591,6 +2591,7 @@ version = "0.2.4"
 dependencies = [
  "md-5",
  "notify",
+ "omafil-core",
  "quick-xml",
  "rustix",
  "serde",
@@ -2601,6 +2602,25 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "tempfile",
+ "trash",
+ "url",
+ "zbus",
+ "zip",
+]
+
+[[package]]
+name = "omafil-core"
+version = "0.2.4"
+dependencies = [
+ "md-5",
+ "notify",
+ "quick-xml",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sysinfo",
  "tempfile",
  "trash",
  "url",

@@ -28,5 +28,6 @@ uninstall:
 	update-desktop-database $(APPS) 2>/dev/null || true
 
 test:
+	cd core && cargo test -q
 	cd src-tauri && cargo test -q
 	cd src && bun test && bun run check

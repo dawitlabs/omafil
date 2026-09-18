@@ -69,7 +69,7 @@ fn read_type(mime: &str) -> Result<Option<Vec<u8>>, DirectoryError> {
     read_clipboard(&["--no-newline", "--type", mime])
 }
 
-pub(crate) fn read_file_clipboard() -> Result<Option<(Vec<String>, bool)>, DirectoryError> {
+pub fn read_file_clipboard() -> Result<Option<(Vec<String>, bool)>, DirectoryError> {
     read_file_clipboard_with(read_clipboard)
 }
 
@@ -117,7 +117,7 @@ fn parse_uri_list(payload: &str) -> Option<Vec<String>> {
     (!paths.is_empty()).then_some(paths)
 }
 
-pub(crate) fn paste_clipboard_image(destination: &str) -> Result<Option<String>, DirectoryError> {
+pub fn paste_clipboard_image(destination: &str) -> Result<Option<String>, DirectoryError> {
     let types = read_clipboard(&["--list-types"])?.unwrap_or_default();
     let types = String::from_utf8_lossy(&types);
     for (mime, extension) in [
@@ -172,7 +172,7 @@ fn save_image(destination: &str, extension: &str, bytes: &[u8]) -> Result<String
     ))
 }
 
-pub(crate) fn write_file_clipboard(paths: &[String], is_cut: bool) -> Result<(), DirectoryError> {
+pub fn write_file_clipboard(paths: &[String], is_cut: bool) -> Result<(), DirectoryError> {
     let mut payload = String::from(if is_cut { "cut\n" } else { "copy\n" });
     let uris: Vec<String> = paths
         .iter()

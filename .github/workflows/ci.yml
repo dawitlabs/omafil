@@ -22,7 +22,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: |
+            core
+            src-tauri
       - name: Frontend
         working-directory: src
         run: |
@@ -32,6 +34,9 @@ jobs:
           bun run build
       - name: Native GIO provider fixtures
         run: /usr/bin/python3 src/tests/linux-services.py
+      - name: Core
+        working-directory: core
+        run: cargo test -q
       - name: Rust
         working-directory: src-tauri
         run: cargo test -q
@@ -39,7 +44,7 @@ jobs:
         working-directory: src-tauri
         run: cargo test native_service_bridge -- --ignored
       - name: Desktop D-Bus contract
-        working-directory: src-tauri
+        working-directory: core
         run: dbus-run-session -- cargo test desktop_bus -- --ignored
       - name: Reversible default registration
         working-directory: src-tauri
@@ -63,7 +68,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: |
+            core
+            src-tauri
       - run: cargo install tauri-cli --version '^2' --locked
       - name: Frontend dependencies
         working-directory: src

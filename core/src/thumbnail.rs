@@ -235,7 +235,7 @@ fn generate(target: &Path, metadata: &fs::Metadata) -> Result<PathBuf, Directory
 
 /// A PNG thumbnail for one file: the shared freedesktop cache first, so
 /// anything another file manager already rendered appears immediately.
-pub(crate) fn thumbnail(path: String) -> Result<String, DirectoryError> {
+pub fn thumbnail(path: String) -> Result<String, DirectoryError> {
     let target = resolve_navigable_path(&path)?;
     let metadata = target.metadata()?;
     if !metadata.is_file() {

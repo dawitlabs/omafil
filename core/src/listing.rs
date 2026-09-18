@@ -8,28 +8,28 @@ use std::{
     time::UNIX_EPOCH,
 };
 
-pub(crate) const MAX_PAGE_SIZE: usize = 1_000;
+pub const MAX_PAGE_SIZE: usize = 1_000;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct DirectoryEntry {
-    pub(crate) name: String,
-    pub(crate) path: String,
-    pub(crate) entry_type: DirectoryEntryType,
-    pub(crate) size: u64,
-    pub(crate) modified: Option<i64>,
+pub struct DirectoryEntry {
+    pub name: String,
+    pub path: String,
+    pub entry_type: DirectoryEntryType,
+    pub size: u64,
+    pub modified: Option<i64>,
 }
 
 #[derive(PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum DirectoryEntryType {
+pub enum DirectoryEntryType {
     Directory,
     File,
 }
 
 #[derive(Clone, Copy, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
-pub(crate) enum EntrySort {
+pub enum EntrySort {
     Name,
     Size,
     Modified,
@@ -47,22 +47,22 @@ impl EntrySort {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct PathCrumb {
-    pub(crate) name: String,
-    pub(crate) path: String,
+pub struct PathCrumb {
+    pub name: String,
+    pub path: String,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct DirectoryListing {
-    pub(crate) path: String,
-    pub(crate) crumbs: Vec<PathCrumb>,
-    pub(crate) entries: Vec<DirectoryEntry>,
-    pub(crate) total: usize,
-    pub(crate) has_more: bool,
+pub struct DirectoryListing {
+    pub path: String,
+    pub crumbs: Vec<PathCrumb>,
+    pub entries: Vec<DirectoryEntry>,
+    pub total: usize,
+    pub has_more: bool,
 }
 
-pub(crate) fn entry_extension(name: &str) -> String {
+pub fn entry_extension(name: &str) -> String {
     name.rsplit_once('.')
         .map(|(stem, extension)| {
             if stem.is_empty() {
@@ -95,7 +95,7 @@ fn order_by(
         .then(if descending { by_column.reverse() } else { by_column })
 }
 
-pub(crate) fn compare_entries(
+pub fn compare_entries(
     left: &DirectoryEntry,
     right: &DirectoryEntry,
     sort: EntrySort,
@@ -142,7 +142,7 @@ fn compare_unstated(
 
 impl DirectoryEntry {
     #[cfg(test)]
-    pub(crate) fn path(&self) -> &str {
+    pub fn path(&self) -> &str {
         &self.path
     }
 }
@@ -187,7 +187,7 @@ impl UnstatedEntry {
     }
 }
 
-pub(crate) fn describe_entry(directory_entry: &fs::DirEntry) -> Option<DirectoryEntry> {
+pub fn describe_entry(directory_entry: &fs::DirEntry) -> Option<DirectoryEntry> {
     Some(UnstatedEntry::read(directory_entry)?.stat())
 }
 
@@ -228,7 +228,7 @@ fn page<T>(entries: Vec<T>, offset: usize, page_size: usize) -> Vec<T> {
 /// Returns one page of matching entries and how many matched, statting every
 /// entry only when the sort column needs it. See [`EntrySort::needs_metadata`].
 #[cfg(test)]
-pub(crate) fn read_directory_page(
+pub fn read_directory_page(
     directory: &Path,
     sort: EntrySort,
     descending: bool,
@@ -273,7 +273,7 @@ fn read_directory_page_revealing(
 
 /// The sidebar tree only needs the folders, and only their names, so it never pays
 /// for the stat calls or the pagination that a full listing carries.
-pub(crate) fn read_subdirectories(path: &str, show_hidden: bool) -> Result<Vec<PathCrumb>, DirectoryError> {
+pub fn read_subdirectories(path: &str, show_hidden: bool) -> Result<Vec<PathCrumb>, DirectoryError> {
     let directory = resolve_navigable_path(path)?;
     let mut folders: Vec<PathCrumb> = fs::read_dir(&directory)
         .map_err(DirectoryError::from)?
@@ -291,7 +291,7 @@ pub(crate) fn read_subdirectories(path: &str, show_hidden: bool) -> Result<Vec<P
     Ok(folders)
 }
 
-pub(crate) fn path_crumbs(directory: &Path, roots: &[PathBuf]) -> Vec<PathCrumb> {
+pub fn path_crumbs(directory: &Path, roots: &[PathBuf]) -> Vec<PathCrumb> {
     let Some(root) = roots
         .iter()
         .filter(|root| directory.starts_with(root))
@@ -317,7 +317,7 @@ pub(crate) fn path_crumbs(directory: &Path, roots: &[PathBuf]) -> Vec<PathCrumb>
     crumbs
 }
 
-pub(crate) fn describe_path(path: String) -> Result<DirectoryEntry, DirectoryError> {
+pub fn describe_path(path: String) -> Result<DirectoryEntry, DirectoryError> {
     let target = resolve_navigable_path(&path)?;
     let metadata = target
         .symlink_metadata()
@@ -341,7 +341,7 @@ pub(crate) fn describe_path(path: String) -> Result<DirectoryEntry, DirectoryErr
 }
 
 #[cfg(test)]
-pub(crate) fn read_directory_listing(
+pub fn read_directory_listing(
     path: String,
     sort: EntrySort,
     descending: bool,
@@ -353,7 +353,7 @@ pub(crate) fn read_directory_listing(
     read_directory_listing_revealing(path, sort, descending, show_hidden, offset, limit, filter, &[])
 }
 
-pub(crate) fn read_directory_listing_revealing(
+pub fn read_directory_listing_revealing(
     path: String, sort: EntrySort, descending: bool, show_hidden: bool,
     offset: usize, limit: usize, filter: &str, reveal_paths: &[String],
 ) -> Result<DirectoryListing, DirectoryError> {

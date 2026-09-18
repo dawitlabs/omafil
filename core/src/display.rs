@@ -20,7 +20,7 @@ fn prefers_wayland(backend: Option<&str>) -> bool {
 /// aimed, which leaves most of the window unusable. XWayland scales by whole
 /// numbers and does not have the fault, so it is what omafil asks for until the
 /// GTK side is fixed. Set `OMAFIL_BACKEND=wayland` to overrule that.
-pub(crate) fn prefer_xwayland() {
+pub fn prefer_xwayland() {
     if env::var_os("WAYLAND_DISPLAY").is_none() {
         return;
     }
@@ -53,7 +53,7 @@ fn request(command: &str) -> Option<String> {
 
 /// The scale of the focused monitor, read out of the compositor's own reply.
 /// A full JSON parser is not needed for two flat fields.
-pub(crate) fn parse_focused_scale(monitors: &str) -> Option<f64> {
+pub fn parse_focused_scale(monitors: &str) -> Option<f64> {
     let mut scale = None;
 
     for line in monitors.lines().map(str::trim) {
@@ -70,7 +70,7 @@ pub(crate) fn parse_focused_scale(monitors: &str) -> Option<f64> {
 
 /// Under XWayland every layer reports a scale of 1, so the compositor is the
 /// only thing that still knows the display is fractionally scaled.
-pub(crate) fn compositor_scale() -> Option<f64> {
+pub fn compositor_scale() -> Option<f64> {
     parse_focused_scale(&request("j/monitors")?).filter(|scale| *scale > 0.0)
 }
 

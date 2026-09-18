@@ -6,34 +6,9 @@
 //! Still missing: search, thumbnails, tabs, split panes, the inspector, drives,
 //! drag and drop, undo and the D-Bus service. Destructive operations are
 //! deliberately not wired: a spike should not be able to delete anything.
-#[path = "../../../src-tauri/src/error.rs"]
-mod error;
-#[path = "../../../src-tauri/src/user_dirs.rs"]
-mod user_dirs;
-#[path = "../../../src-tauri/src/paths.rs"]
-mod paths;
-#[path = "../../../src-tauri/src/desktop_requests.rs"]
-mod desktop_requests;
-#[path = "../../../src-tauri/src/listing.rs"]
-mod listing;
-#[path = "../../../src-tauri/src/watcher.rs"]
-mod watcher;
-#[path = "../../../src-tauri/src/omarchy.rs"]
-mod omarchy;
-#[path = "../../../src-tauri/src/launch.rs"]
-mod launch;
-#[path = "../../../src-tauri/src/recycle.rs"]
-mod recycle;
-#[path = "../../../src-tauri/src/operation_io.rs"]
-mod operation_io;
-#[path = "../../../src-tauri/src/operations.rs"]
-mod operations;
-#[path = "../../../src-tauri/src/drives.rs"]
-mod drives;
-#[path = "../../../src-tauri/src/file_manager_service.rs"]
-mod file_manager_service;
 
 use gtk4::{gio, glib, prelude::*, subclass::prelude::*};
+use omafil_core::{drives, file_manager_service, launch, listing, omarchy, operations, paths, watcher};
 use listing::{DirectoryEntry, DirectoryEntryType, EntrySort};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 

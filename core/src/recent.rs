@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::{fs, path::PathBuf};
 use url::Url;
 
-pub(crate) const MAX_RECENT_FILES: usize = 50;
+pub const MAX_RECENT_FILES: usize = 50;
 
 const EMPTY_HISTORY: &str = concat!(
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
@@ -17,19 +17,19 @@ const EMPTY_HISTORY: &str = concat!(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RecentFile {
+pub struct RecentFile {
     name: String,
     path: String,
     parent_directory: String,
 }
 
-pub(crate) fn recently_used_file_path() -> Result<PathBuf, RecentFilesError> {
+pub fn recently_used_file_path() -> Result<PathBuf, RecentFilesError> {
     current_user_home_directory()
         .map(|home_directory| home_directory.join(".local/share/recently-used.xbel"))
         .map_err(|_| RecentFilesError::unavailable())
 }
 
-pub(crate) fn read_recent_files() -> Result<Vec<RecentFile>, RecentFilesError> {
+pub fn read_recent_files() -> Result<Vec<RecentFile>, RecentFilesError> {
     let history_path = recently_used_file_path()?;
     if !history_path.exists() {
         return Ok(Vec::new());
@@ -39,7 +39,7 @@ pub(crate) fn read_recent_files() -> Result<Vec<RecentFile>, RecentFilesError> {
     parse_history(&history)
 }
 
-pub(crate) fn clear_recent_files() -> Result<(), RecentFilesError> {
+pub fn clear_recent_files() -> Result<(), RecentFilesError> {
     let history_path = recently_used_file_path()?;
     if !history_path.exists() {
         return Ok(());

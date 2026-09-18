@@ -6,10 +6,10 @@ use std::{collections::HashSet, fs, path::{Path, PathBuf}, process::Command};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct Opener {
-    pub(crate) id: String,
-    pub(crate) name: String,
-    pub(crate) is_default: bool,
+pub struct Opener {
+    pub id: String,
+    pub name: String,
+    pub is_default: bool,
 }
 
 struct DesktopEntry {
@@ -19,7 +19,7 @@ struct DesktopEntry {
 }
 
 /// Every XDG data directory's `sub` folder, most specific first.
-pub(crate) fn data_dirs(sub: &str) -> Vec<PathBuf> {
+pub fn data_dirs(sub: &str) -> Vec<PathBuf> {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let data_home = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
@@ -99,7 +99,7 @@ fn xdg_mime(args: &[&str]) -> Option<String> {
     (output.status.success() && !value.is_empty()).then_some(value)
 }
 
-pub(crate) fn file_mime(target: &Path) -> Option<String> {
+pub fn file_mime(target: &Path) -> Option<String> {
     xdg_mime(&["query", "filetype", &target.to_string_lossy()])
 }
 
@@ -110,7 +110,7 @@ fn find_entry(id: &str) -> Option<DesktopEntry> {
         .and_then(|source| parse_desktop_entry(&source))
 }
 
-pub(crate) fn list_openers(path: String) -> Result<Vec<Opener>, DirectoryError> {
+pub fn list_openers(path: String) -> Result<Vec<Opener>, DirectoryError> {
     let target = resolve_navigable_path(&path)?;
     let mime = file_mime(&target)
         .ok_or_else(|| DirectoryError::detail("Unable to determine this file's type."))?;
@@ -141,7 +141,7 @@ pub(crate) fn list_openers(path: String) -> Result<Vec<Opener>, DirectoryError> 
     Ok(openers)
 }
 
-pub(crate) fn set_default_opener(path: String, desktop_id: String) -> Result<(), DirectoryError> {
+pub fn set_default_opener(path: String, desktop_id: String) -> Result<(), DirectoryError> {
     let target = resolve_navigable_path(&path)?;
     find_entry(&desktop_id).ok_or_else(|| DirectoryError::detail("That app is no longer installed."))?;
     let mime = file_mime(&target)
@@ -154,7 +154,7 @@ pub(crate) fn set_default_opener(path: String, desktop_id: String) -> Result<(),
     }
 }
 
-pub(crate) fn open_with(path: String, desktop_id: String) -> Result<(), DirectoryError> {
+pub fn open_with(path: String, desktop_id: String) -> Result<(), DirectoryError> {
     let target = resolve_navigable_path(&path)?;
     let entry = find_entry(&desktop_id).ok_or_else(|| DirectoryError::detail("That app is no longer installed."))?;
     let command = build_command(&entry.exec, &target.to_string_lossy());

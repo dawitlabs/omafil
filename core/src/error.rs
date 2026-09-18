@@ -1,88 +1,88 @@
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
-pub(crate) struct DirectoryError {
+pub struct DirectoryError {
     code: &'static str,
     message: String,
 }
 
 #[derive(Serialize)]
-pub(crate) struct DriveError {
+pub struct DriveError {
     code: &'static str,
     message: &'static str,
 }
 
 #[derive(Debug, Serialize)]
-pub(crate) struct RecentFilesError {
+pub struct RecentFilesError {
     code: &'static str,
     message: &'static str,
 }
 
 impl DirectoryError {
-    pub(crate) fn cancelled() -> Self {
+    pub fn cancelled() -> Self {
         Self {
             code: "operation_cancelled",
             message: "Operation cancelled. Completed items were kept.".into(),
         }
     }
 
-    pub(crate) fn detail(message: impl Into<String>) -> Self {
+    pub fn detail(message: impl Into<String>) -> Self {
         Self {
             code: "operation_failed",
             message: message.into(),
         }
     }
 
-    pub(crate) fn is_cancelled(&self) -> bool {
+    pub fn is_cancelled(&self) -> bool {
         self.code == "operation_cancelled"
     }
-    pub(crate) fn message(&self) -> &str {
+    pub fn message(&self) -> &str {
         &self.message
     }
 
-    pub(crate) fn unavailable() -> Self {
+    pub fn unavailable() -> Self {
         Self {
             code: "directory_unavailable",
             message: "This folder is unavailable on this device.".into(),
         }
     }
 
-    pub(crate) fn read_failed() -> Self {
+    pub fn read_failed() -> Self {
         Self {
             code: "directory_read_failed",
             message: "Unable to read this folder.".into(),
         }
     }
 
-    pub(crate) fn open_failed() -> Self {
+    pub fn open_failed() -> Self {
         Self {
             code: "open_failed",
             message: "Unable to open this item.".into(),
         }
     }
 
-    pub(crate) fn invalid_name() -> Self {
+    pub fn invalid_name() -> Self {
         Self {
             code: "invalid_name",
             message: "That name contains characters that are not allowed.".into(),
         }
     }
 
-    pub(crate) fn already_exists() -> Self {
+    pub fn already_exists() -> Self {
         Self {
             code: "already_exists",
             message: "An item with that name already exists here.".into(),
         }
     }
 
-    pub(crate) fn invalid_destination() -> Self {
+    pub fn invalid_destination() -> Self {
         Self {
             code: "invalid_destination",
             message: "A folder cannot be moved into itself.".into(),
         }
     }
 
-    pub(crate) fn operation_failed() -> Self {
+    pub fn operation_failed() -> Self {
         Self {
             code: "operation_failed",
             message: "Unable to complete that operation.".into(),
@@ -91,14 +91,14 @@ impl DirectoryError {
 }
 
 impl RecentFilesError {
-    pub(crate) const fn unavailable() -> Self {
+    pub const fn unavailable() -> Self {
         Self {
             code: "recent_files_unavailable",
             message: "Unable to read recent files from this desktop.",
         }
     }
 
-    pub(crate) const fn clear_failed() -> Self {
+    pub const fn clear_failed() -> Self {
         Self {
             code: "recent_files_clear_failed",
             message: "Unable to clear the list of recently used files.",
@@ -107,7 +107,7 @@ impl RecentFilesError {
 }
 
 impl DriveError {
-    pub(crate) const fn discovery_failed() -> Self {
+    pub const fn discovery_failed() -> Self {
         Self {
             code: "drive_discovery_failed",
             message: "Unable to discover mounted drives.",

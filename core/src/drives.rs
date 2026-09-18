@@ -8,20 +8,20 @@ use std::{
 };
 use sysinfo::Disks;
 
-pub(crate) struct DriveWatcher(#[allow(dead_code)] pub(crate) RecommendedWatcher);
+pub struct DriveWatcher(#[allow(dead_code)] pub RecommendedWatcher);
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct DriveInfo {
-    pub(crate) name: String,
-    pub(crate) mount_point: String,
-    pub(crate) path: String,
-    pub(crate) total_bytes: u64,
-    pub(crate) available_bytes: u64,
-    pub(crate) is_removable: bool,
-    pub(crate) is_read_only: bool,
-    pub(crate) is_mounted: bool,
-    pub(crate) device: Option<String>,
+pub struct DriveInfo {
+    pub name: String,
+    pub mount_point: String,
+    pub path: String,
+    pub total_bytes: u64,
+    pub available_bytes: u64,
+    pub is_removable: bool,
+    pub is_read_only: bool,
+    pub is_mounted: bool,
+    pub device: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -129,14 +129,14 @@ fn mount_point_from(output: &str) -> Option<String> {
         .filter(|point| point.starts_with('/'))
 }
 
-pub(crate) fn mount_drive(device: &str) -> Result<String, DirectoryError> {
+pub fn mount_drive(device: &str) -> Result<String, DirectoryError> {
     let device = known_device(device)?;
     let output = udisks(&["mount", "-b", &device.path])?;
 
     mount_point_from(&output).ok_or_else(|| DirectoryError::detail("Mounted, but the mount point could not be read."))
 }
 
-pub(crate) fn unmount_drive(device: &str) -> Result<(), DirectoryError> {
+pub fn unmount_drive(device: &str) -> Result<(), DirectoryError> {
     let device = known_device(device)?;
 
     udisks(&["unmount", "-b", &device.path]).map(drop)
@@ -161,7 +161,7 @@ fn udisks_object_path(device: &str) -> String {
 
 /// udisksctl cannot format, so this goes straight to the UDisks2 method behind it.
 /// polkit still gates the call, which keeps omafil itself out of root.
-pub(crate) fn format_drive(device: &str, filesystem: &str, label: &str) -> Result<(), DirectoryError> {
+pub fn format_drive(device: &str, filesystem: &str, label: &str) -> Result<(), DirectoryError> {
     if !FORMAT_FILESYSTEMS.contains(&filesystem) {
         return Err(DirectoryError::detail("That filesystem is not supported."));
     }
@@ -209,7 +209,7 @@ pub(crate) fn format_drive(device: &str, filesystem: &str, label: &str) -> Resul
     Err(DirectoryError::detail(if reason.is_empty() { "The drive could not be formatted.".to_owned() } else { reason }))
 }
 
-pub(crate) fn eject_drive(device: &str) -> Result<(), DirectoryError> {
+pub fn eject_drive(device: &str) -> Result<(), DirectoryError> {
     let device = known_device(device)?;
 
     if device.mountpoint.is_some() {
@@ -220,7 +220,7 @@ pub(crate) fn eject_drive(device: &str) -> Result<(), DirectoryError> {
     udisks(&["power-off", "-b", &disk]).map(drop)
 }
 
-pub(crate) fn is_user_visible_drive_mount(mount_point: &Path) -> bool {
+pub fn is_user_visible_drive_mount(mount_point: &Path) -> bool {
     if mount_point == Path::new("/") {
         return true;
     }
@@ -233,7 +233,7 @@ pub(crate) fn is_user_visible_drive_mount(mount_point: &Path) -> bool {
         || mount_point.to_string_lossy().contains("/gvfs/")
 }
 
-pub(crate) fn drive_navigation_path(mount_point: &Path) -> PathBuf {
+pub fn drive_navigation_path(mount_point: &Path) -> PathBuf {
     if mount_point == Path::new("/") {
         if let Ok(home_directory) = current_user_home_directory() {
             return home_directory;
@@ -243,7 +243,7 @@ pub(crate) fn drive_navigation_path(mount_point: &Path) -> PathBuf {
     mount_point.to_path_buf()
 }
 
-pub(crate) fn read_drives() -> Vec<DriveInfo> {
+pub fn read_drives() -> Vec<DriveInfo> {
     let disks = Disks::new_with_refreshed_list();
     let devices = read_block_devices();
     let home_directory_name = current_user_home_directory().ok().and_then(|path| {

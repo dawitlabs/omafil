@@ -6,21 +6,21 @@ const MAX_TEXT_PREVIEW_BYTES: u64 = 48 * 1024;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct PathInspection {
-    pub(crate) name: String,
-    pub(crate) path: String,
-    pub(crate) entry_type: String,
-    pub(crate) size: u64,
-    pub(crate) item_count: u64,
-    pub(crate) modified: Option<i64>,
-    pub(crate) created: Option<i64>,
-    pub(crate) preview: Option<String>,
-    pub(crate) preview_truncated: bool,
-    pub(crate) media_preview: Option<String>,
-    pub(crate) media_type: Option<String>,
-    pub(crate) mode: u32,
-    pub(crate) owner: String,
-    pub(crate) group: String,
+pub struct PathInspection {
+    pub name: String,
+    pub path: String,
+    pub entry_type: String,
+    pub size: u64,
+    pub item_count: u64,
+    pub modified: Option<i64>,
+    pub created: Option<i64>,
+    pub preview: Option<String>,
+    pub preview_truncated: bool,
+    pub media_preview: Option<String>,
+    pub media_type: Option<String>,
+    pub mode: u32,
+    pub owner: String,
+    pub group: String,
 }
 
 /// passwd and group files share the `name:x:id:` layout, so one lookup serves both.
@@ -41,7 +41,7 @@ fn account_name(file: &str, id: u32) -> String {
         .unwrap_or_else(|| id.to_string())
 }
 
-pub(crate) fn set_permissions(path: String, mode: u32) -> Result<(), DirectoryError> {
+pub fn set_permissions(path: String, mode: u32) -> Result<(), DirectoryError> {
     let target = resolve_navigable_path(&path)?;
 
     fs::set_permissions(&target, fs::Permissions::from_mode(mode & 0o777))
@@ -113,7 +113,7 @@ fn folder_size(path: &Path) -> (u64, u64) {
     (total, count)
 }
 
-pub(crate) fn inspect_path(path: String) -> Result<PathInspection, DirectoryError> {
+pub fn inspect_path(path: String) -> Result<PathInspection, DirectoryError> {
     let target = resolve_navigable_path(&path)?;
     let metadata = target
         .metadata()

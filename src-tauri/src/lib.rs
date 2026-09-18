@@ -1,33 +1,38 @@
 mod linux_services;
+
+// The toolkit-independent half now lives in omafil-core; re-exported under
+// its former paths so call sites here are unchanged.
+pub(crate) use omafil_core::{
+    archive,
+    clipboard,
+    desktop_integration,
+    desktop_requests,
+    diagnostics,
+    dictation,
+    display,
+    drives,
+    error,
+    file_manager_service,
+    icon_theme,
+    inspect,
+    launch,
+    listing,
+    omarchy,
+    openers,
+    operation_io,
+    operations,
+    paths,
+    preview,
+    recent,
+    recycle,
+    search,
+    store,
+    thumbnail,
+    user_dirs,
+    watcher,
+};
 pub mod airdrop;
-mod archive;
-mod display;
-mod drives;
-mod diagnostics;
-mod desktop_requests;
-mod dictation;
-mod desktop_integration;
-mod file_manager_service;
-mod error;
-mod icon_theme;
-mod inspect;
-mod launch;
-mod listing;
-mod omarchy;
-mod openers;
-mod operations;
 mod operation_queue;
-mod operation_io;
-mod paths;
-mod user_dirs;
-mod preview;
-mod clipboard;
-mod recent;
-mod recycle;
-mod search;
-mod store;
-mod thumbnail;
-mod watcher;
 
 use crate::drives::{read_drives, DriveInfo, DriveWatcher};
 use crate::archive::{create_zip as write_zip, extract_zip as unpack_zip};

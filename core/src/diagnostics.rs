@@ -16,7 +16,7 @@ struct Entry<'a> {
     detail: Option<&'a str>,
 }
 
-pub(crate) fn log_path() -> Option<PathBuf> {
+pub fn log_path() -> Option<PathBuf> {
     let base = std::env::var_os("XDG_STATE_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/state")))?;
@@ -25,7 +25,7 @@ pub(crate) fn log_path() -> Option<PathBuf> {
 }
 
 /// One JSON object per line; the previous log is kept once when the cap is hit.
-pub(crate) fn append(path: &PathBuf, event: &str, message: &str, detail: Option<&str>) {
+pub fn append(path: &PathBuf, event: &str, message: &str, detail: Option<&str>) {
     if let Some(parent) = path.parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -39,7 +39,7 @@ pub(crate) fn append(path: &PathBuf, event: &str, message: &str, detail: Option<
     }
 }
 
-pub(crate) fn install_panic_hook() {
+pub fn install_panic_hook() {
     let previous = std::panic::take_hook();
 
     std::panic::set_hook(Box::new(move |info| {

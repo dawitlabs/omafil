@@ -7,33 +7,33 @@ use std::{
     sync::Mutex,
 };
 
-pub(crate) const MAX_TARGETS: usize = 128;
+pub const MAX_TARGETS: usize = 128;
 const MAX_PENDING: usize = 256;
 
 #[derive(Clone, Debug, Default, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct OpenRequest {
+pub struct OpenRequest {
     pub targets: Vec<OpenTarget>,
     pub error: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct OpenTarget {
+pub struct OpenTarget {
     pub folder: String,
     pub selection: Vec<String>,
     pub properties: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
-pub(crate) enum OpenMode {
+pub enum OpenMode {
     Open,
     Folders,
     Select,
     Properties,
 }
 
-pub(crate) enum CliAction {
+pub enum CliAction {
     Help,
     Version,
     DesktopService,
@@ -42,7 +42,7 @@ pub(crate) enum CliAction {
     Open(OpenRequest),
 }
 
-pub(crate) fn local_path(value: &str, cwd: &Path) -> Result<PathBuf, String> {
+pub fn local_path(value: &str, cwd: &Path) -> Result<PathBuf, String> {
     if value.is_empty() || value.contains('\0') {
         return Err("A location cannot be empty or contain a NUL character.".into());
     }
@@ -87,7 +87,7 @@ pub(crate) fn local_path(value: &str, cwd: &Path) -> Result<PathBuf, String> {
     })
 }
 
-pub(crate) fn request_for(
+pub fn request_for(
     values: &[String],
     cwd: &Path,
     mode: OpenMode,
@@ -154,7 +154,7 @@ pub(crate) fn request_for(
     })
 }
 
-pub(crate) fn parse_cli(args: &[String], cwd: &Path) -> Result<CliAction, String> {
+pub fn parse_cli(args: &[String], cwd: &Path) -> Result<CliAction, String> {
     if args.len() == 1 {
         match args[0].as_str() {
             "--desktop-service" => return Ok(CliAction::DesktopService),
@@ -200,7 +200,7 @@ pub(crate) fn parse_cli(args: &[String], cwd: &Path) -> Result<CliAction, String
 }
 
 #[derive(Default)]
-pub(crate) struct OpenRequests(Mutex<VecDeque<OpenRequest>>);
+pub struct OpenRequests(Mutex<VecDeque<OpenRequest>>);
 
 impl OpenRequests {
     pub fn push(&self, request: OpenRequest) -> Result<(), String> {

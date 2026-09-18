@@ -10,7 +10,7 @@ use std::{
 
 /// Only media consumed by passive img/audio/video elements can get an asset URL.
 /// HTML, SVG, devices, sockets and pipes never receive a dynamic grant.
-pub(crate) fn media_asset(path: &str) -> Result<PathBuf, DirectoryError> {
+pub fn media_asset(path: &str) -> Result<PathBuf, DirectoryError> {
     let target = resolve_navigable_path(path)?;
     let extension = target.extension().and_then(|value| value.to_str()).unwrap_or("").to_ascii_lowercase();
     if !target.metadata()?.is_file() || !matches!(extension.as_str(),
@@ -24,7 +24,7 @@ pub(crate) fn media_asset(path: &str) -> Result<PathBuf, DirectoryError> {
     Ok(target)
 }
 
-pub(crate) fn cache_root() -> Option<PathBuf> {
+pub fn cache_root() -> Option<PathBuf> {
     std::env::var_os("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache")))
@@ -35,7 +35,7 @@ fn cache_dir() -> Option<PathBuf> {
 }
 
 /// First page of a PDF as a small PNG, rendered once per (path, mtime, size).
-pub(crate) fn pdf_preview(path: String) -> Result<String, DirectoryError> {
+pub fn pdf_preview(path: String) -> Result<String, DirectoryError> {
     let target = resolve_navigable_path(&path)?;
     let metadata = target.metadata()?;
     if !metadata.is_file() || !target.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("pdf")) {
