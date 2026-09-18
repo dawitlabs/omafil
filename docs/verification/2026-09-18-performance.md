@@ -242,3 +242,47 @@ close to free.
 
 Nothing measured so far suggests a ported omafil would fail to beat Nautilus on
 both axes.
+
+## Time to a readable list
+
+`scripts/bench_usable.py` captures the window with `grim` and reports the first
+moment the contents have both appeared and stopped changing. Two repetitions
+per cell, medians.
+
+The accessibility tree would have been a cleaner signal, but GTK creates
+accessible objects lazily and exposes no rows without a screen reader attached;
+forcing `GTK_A11Y=atspi` did not change that.
+
+| Files | GTK4 slice | omafil (Tauri) | Nautilus |
+| --- | --- | --- | --- |
+| 1,000 | **1061 ms** | 1379 ms | 1155 ms |
+| 10,000 | **1049 ms** | 1338 ms | 1096 ms |
+| 50,000 | **1077 ms** | 1415 ms | 1298 ms |
+
+### This reverses a conclusion
+
+**Omafil is slower than Nautilus to a readable list at every size**, by 17 to
+22 percent, despite the window-mapped figures putting it ahead. The window maps
+early and empty, and the earlier table flattered it exactly as suspected.
+
+**The GTK4 slice is flat**: 1061, 1049, 1077 ms from 1,000 to 50,000 files.
+Nautilus grows, from 1155 to 1298 ms, so the slice's advantage widens with
+directory size — 8 percent at 1,000 files, 17 percent at 50,000. That is the
+paged listing showing up on the metric that matters, and it is the shape that
+would keep widening past 100,000 entries.
+
+### Caveats
+
+- **Everything here includes Hyprland's window-open animation.** Frames stop
+  changing only once the animation finishes, which adds a constant to every
+  figure and compresses the differences between apps. The ordering is sound;
+  the absolute values are inflated and the relative gaps are understated.
+- "Stopped changing" is a proxy for "readable". An app that paints rows and
+  then adjusts them would be scored late.
+- Two repetitions per cell, though the spread within each was under 3 percent.
+
+### Net
+
+On window-mapped, omafil beat Nautilus. On time to a readable list, it loses.
+The GTK4 slice wins on both, and is the only one of the three whose time does
+not grow with the directory.
