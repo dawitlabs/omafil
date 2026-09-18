@@ -17,7 +17,7 @@ jobs:
       - name: Tauri system libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libarchive-tools
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libarchive-tools xdg-utils dbus-daemon python3-gi gir1.2-glib-2.0
       - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -30,9 +30,22 @@ jobs:
           bun test
           bun run check
           bun run build
+      - name: Native GIO provider fixtures
+        run: /usr/bin/python3 src/tests/linux-services.py
       - name: Rust
         working-directory: src-tauri
         run: cargo test -q
+      - name: Native Rust to GIO bridge
+        working-directory: src-tauri
+        run: cargo test native_service_bridge -- --ignored
+      - name: Desktop D-Bus contract
+        working-directory: src-tauri
+        run: dbus-run-session -- cargo test desktop_bus -- --ignored
+      - name: Reversible default registration
+        working-directory: src-tauri
+        run: |
+          cargo build --locked --features tauri/custom-protocol
+          python3 ../src/tests/desktop-integration.py
 
   release:
     needs: test

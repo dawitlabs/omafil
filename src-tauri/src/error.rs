@@ -54,13 +54,6 @@ impl DirectoryError {
         }
     }
 
-    pub(crate) fn not_allowed() -> Self {
-        Self {
-            code: "directory_not_allowed",
-            message: "This location is outside your files and drives.".into(),
-        }
-    }
-
     pub(crate) fn open_failed() -> Self {
         Self {
             code: "open_failed",
@@ -124,6 +117,31 @@ impl DriveError {
 
 impl From<std::io::Error> for DirectoryError {
     fn from(error: std::io::Error) -> Self {
-        Self::detail(format!("Unable to complete this operation: {error}"))
+        let (code, message) = match error.kind() {
+            std::io::ErrorKind::PermissionDenied => ("permission_denied", "You do not have permission to access or change this item."),
+            std::io::ErrorKind::NotFound => ("location_missing", "This location no longer exists or its drive is not mounted."),
+            std::io::ErrorKind::NotConnected | std::io::ErrorKind::ConnectionAborted
+                | std::io::ErrorKind::ConnectionReset | std::io::ErrorKind::BrokenPipe =>
+                ("location_disconnected", "The connection to this location was lost. Reconnect and try again."),
+            _ if error.raw_os_error() == Some(107) =>
+                ("location_disconnected", "The connection to this location was lost. Reconnect and try again."),
+            _ => return Self::detail(format!("Unable to complete this operation: {error}")),
+        };
+        Self { code, message: message.into() }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn io_errors_keep_actionable_categories() {
+        for (kind, code) in [
+            (std::io::ErrorKind::PermissionDenied, "permission_denied"),
+            (std::io::ErrorKind::NotFound, "location_missing"),
+            (std::io::ErrorKind::NotConnected, "location_disconnected"),
+        ] {
+            assert_eq!(DirectoryError::from(std::io::Error::from(kind)).code, code);
+        }
     }
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick, untrack } from 'svelte'
   import ChevronDownIcon from '@fluentui/svg-icons/icons/chevron_down_12_filled.svg?no-inline'
   import ChevronUpIcon from '@fluentui/svg-icons/icons/chevron_up_12_filled.svg?no-inline'
   import CommandBar from '../CommandBar/CommandBar.svelte'
@@ -7,6 +8,7 @@
   import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
   import { appState } from '../../appState.svelte'
   import { isExtractable } from '../../archives'
+  import { sharing } from '../../sharing.svelte'
   import { fileOperations } from '../../fileOperations.svelte'
   import { formatCount } from '../../format'
   import { tabs } from '../../tabs.svelte'
@@ -24,6 +26,18 @@
 
   const entries = $derived(navigation.entries)
   const hiddenCount = $derived(navigation.hiddenCount)
+
+  $effect(() => {
+    const selection = navigation.pendingReveal
+    if (!selection || navigation.isLoading || tabs.active !== navigation) return
+    const available = entries.filter((entry) => selection.includes(entry.path)).map((entry) => entry.path)
+    untrack(() => {
+      navigation.pendingReveal = null
+      fileOperations.selectWithin(available)
+      const index = entries.findIndex((entry) => available.includes(entry.path))
+      if (index >= 0) void tick().then(() => focusRow(index))
+    })
+  })
 
   // Sorting is a property of a directory listing; search and tag results come
   // back in walk order, so their headers are labels rather than controls.
@@ -89,6 +103,7 @@
         { kind: 'separator' },
         { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: () => fileOperations.cutSelection() },
         { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => fileOperations.copySelection() },
+        { kind: 'action', label: 'Share…', onSelect: () => sharing.open(fileOperations.selectedPaths) },
         { kind: 'separator' },
         ...(fileOperations.selectedPaths.length > 1 ? [{ kind: 'action', label: 'Compress to ZIP', onSelect: () => fileOperations.compressSelection() } as ContextMenuItem] : []),
         { kind: 'action', label: 'Extract here', disabled: !isExtractable(entry.name), onSelect: () => fileOperations.extractSelection() },
@@ -226,7 +241,7 @@
   let isAwaitingG = false
 
   function handleKeydown(event: KeyboardEvent) {
-    if (fileOperations.renamingPath) return
+    if (event.defaultPrevented || isTypingInto(event.target) || fileOperations.renamingPath) return
 
     const entry = entries[activeIndex]
 
@@ -264,7 +279,19 @@
 
     if (event.key in moves) {
       event.preventDefault()
-      moveSelection(moves[event.key])
+      const target = Math.max(0, Math.min(moves[event.key], entries.length - 1))
+      if (event.shiftKey && entries[target]) {
+        fileOperations.extendTo(entries[target].path)
+        focusRow(target)
+      } else if (event.ctrlKey || event.metaKey) focusRow(target)
+      else moveSelection(target)
+      return
+    }
+
+    if (event.key === ' ' && entry && (!navigation.filter || event.ctrlKey || event.metaKey)) {
+      event.preventDefault()
+      event.stopPropagation()
+      fileOperations.toggle(entry.path)
       return
     }
 
@@ -358,10 +385,10 @@
 
 <CommandBar />
 
-{#if fileOperations.error}
-  <div class="file-list__error" role="alert">
-    <p>{fileOperations.error}</p>
-    <button class="home-view__retry" type="button" onclick={() => (fileOperations.error = null)}>Dismiss</button>
+{#if navigation.revealedPaths.length > 0}
+  <div class="file-list__reveal" role="status">
+    <span>Requested items appear first.</span>
+    <button class="home-view__retry" type="button" onclick={() => navigation.clearReveal()}>Restore normal order</button>
   </div>
 {/if}
 

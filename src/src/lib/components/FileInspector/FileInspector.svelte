@@ -1,6 +1,6 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core'
-  import { convertFileSrc } from '@tauri-apps/api/core'
+  import { mediaPreviewSource, pdfPreviewSource } from '../../preview'
   import DismissIcon from '@fluentui/svg-icons/icons/dismiss_20_regular.svg?no-inline'
   import FolderIcon from '@fluentui/svg-icons/icons/folder_48_regular.svg?no-inline'
   import { readableError } from '../../errors'
@@ -39,8 +39,8 @@
 
     try {
       inspection = await invoke<PathInspection>('inspect_path', { path: target })
-    } catch {
-      error = 'Unable to read details for this item.'
+    } catch (caught) {
+      error = readableError(caught, 'Unable to read details for this item.')
     } finally {
       loading = false
     }
@@ -72,19 +72,23 @@
   const isFolder = $derived(inspection?.entryType === 'folder')
   const icon = $derived(inspection ? (isFolder ? { icon: FolderIcon, tone: 'var(--folder-body-bottom)', themeName: 'folder' } : fileIcon(inspection.name)) : null)
   const themedIcon = $derived(inspection && icon ? appState.themeIconFor(isFolder ? folderThemeName(inspection.name) : icon.themeName) : null)
-  const mediaSource = $derived(inspection?.mediaType ? convertFileSrc(inspection.path) : null)
+  let mediaSource = $state<string | null>(null)
   let pdfPreview = $state<string | null>(null)
 
   $effect(() => {
+    mediaSource = null
     pdfPreview = null
-    if (inspection?.mediaType !== 'application/pdf') return
+    if (mode !== 'preview' || !inspection?.mediaType) return
     const target = inspection.path
-
-    invoke<string>('pdf_preview', { path: target })
-      .then((rendered) => {
-        if (inspection?.path === target) pdfPreview = convertFileSrc(rendered)
-      })
-      .catch(() => undefined)
+    const isPdf = inspection.mediaType === 'application/pdf'
+    let cancelled = false
+    const load = isPdf ? pdfPreviewSource : mediaPreviewSource
+    load(target).then((source) => {
+      if (cancelled) return
+      if (isPdf) pdfPreview = source
+      else mediaSource = source
+    }).catch(() => undefined)
+    return () => { cancelled = true }
   })
 </script>
 
@@ -97,7 +101,7 @@
           <span class="masked-icon" style="--icon: url({DismissIcon})" aria-hidden="true"></span>
         </button>
       </header>
-      <div class="file-inspector__tabs" role="tablist" aria-label="Properties sections">{#each ['General', 'Details', 'Permissions'] as tab}<button type="button" role="tab" aria-selected={activeTab === tab} onclick={() => activeTab = tab}>{tab}</button>{/each}</div>
+      <div class="file-inspector__tabs" role="tablist" aria-label="Properties sections">{#each ['General', 'Details', 'Permissions'] as tab (tab)}<button type="button" role="tab" aria-selected={activeTab === tab} onclick={() => activeTab = tab}>{tab}</button>{/each}</div>
       <div class="file-inspector__dialog-content">{@render content()}</div>
       <footer class="file-inspector__footer"><button type="button" onclick={onclose}>Close</button></footer>
     </dialog>

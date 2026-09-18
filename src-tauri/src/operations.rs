@@ -46,7 +46,7 @@ pub(crate) fn create_directory(
     }
 
     let target = vacant_target(&parent, &name)?;
-    fs::create_dir(&target).map_err(|_| DirectoryError::operation_failed())?;
+    fs::create_dir(&target).map_err(DirectoryError::from)?;
 
     Ok(target.to_string_lossy().into_owned())
 }
@@ -224,12 +224,12 @@ pub(crate) fn permanently_delete_entries(paths: Vec<String>) -> Result<(), Direc
         let target = resolve_entry_path(&path)?;
         let metadata = target
             .symlink_metadata()
-            .map_err(|_| DirectoryError::unavailable())?;
+            .map_err(DirectoryError::from)?;
 
         if metadata.is_dir() {
-            fs::remove_dir_all(target).map_err(|_| DirectoryError::operation_failed())?;
+            fs::remove_dir_all(target).map_err(DirectoryError::from)?;
         } else {
-            fs::remove_file(target).map_err(|_| DirectoryError::operation_failed())?;
+            fs::remove_file(target).map_err(DirectoryError::from)?;
         }
     }
 

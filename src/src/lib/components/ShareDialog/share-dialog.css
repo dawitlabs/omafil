@@ -1,0 +1,69 @@
+.share-dialog {
+  position: fixed;
+  inset: 0;
+  height: fit-content;
+  max-width: calc(100vw - 48px);
+  margin: auto;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.share-dialog::backdrop {
+  background: rgb(0 0 0 / 35%);
+}
+
+.share-dialog__body {
+  padding: 4px 20px 20px;
+}
+
+.share-dialog__selection {
+  font-weight: 600;
+  margin: 8px 0;
+}
+
+.share-dialog__files {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+}
+
+.share-dialog__files li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 0;
+}
+
+.share-dialog__method {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.share-dialog__method-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.share-dialog__method-heading h3 {
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.share-dialog__method p {
+  line-height: 1.5;
+  margin: 12px 0 0;
+}
+
+.share-dialog__badge,
+.share-dialog__hint,
+.share-dialog__more {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.share-dialog__method button {
+  margin-top: 12px;
+}

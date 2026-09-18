@@ -43,6 +43,9 @@ class FileOperations {
   #anchorPath = $state<string | null>(null)
 
   clipboardPaths = $state<string[]>([])
+  #clipboardWrite: Promise<unknown> = Promise.resolve()
+  #clipboardRevision = 0
+  #isPasting = false
   clipboardMode = $state<ClipboardMode | null>(null)
   renamingPath = $state<string | null>(null)
   renameDraft = $state('')
@@ -75,7 +78,7 @@ class FileOperations {
   }
 
   get canPaste(): boolean {
-    return this.clipboardMode !== null && this.clipboardPaths.length > 0 && this.directoryPath !== ''
+    return this.directoryPath !== '' && !this.isBusy
   }
 
   isSelected(path: string): boolean {
@@ -131,19 +134,28 @@ class FileOperations {
 
     this.clipboardPaths = paths
     this.clipboardMode = mode
-    void invoke('write_file_clipboard', { paths, isCut: mode === 'cut' }).catch(() => {})
+    this.#clipboardRevision += 1
+    this.#clipboardWrite = this.#clipboardWrite.then(() => invoke('write_file_clipboard', { paths, isCut: mode === 'cut' })).catch((error) => {
+      this.error = readableError(error, 'Unable to copy to the desktop clipboard.')
+    })
   }
 
   /** Picks up files copied in another file manager, so Ctrl+V works across apps. */
-  async syncFromDesktopClipboard() {
-    const clipboard = await invoke<[string[], boolean] | null>('read_file_clipboard').catch(() => null)
-    if (!clipboard) return
-
-    const [paths, isCut] = clipboard
-    if (paths.join('\n') === this.clipboardPaths.join('\n')) return
-
-    this.clipboardPaths = paths
-    this.clipboardMode = isCut ? 'cut' : 'copy'
+  async syncFromDesktopClipboard(forPaste = false) {
+    if (this.#isPasting && !forPaste) return
+    await this.#clipboardWrite
+    const revision = ++this.#clipboardRevision
+    try {
+      const clipboard = await invoke<[string[], boolean] | null>('read_file_clipboard')
+      if (revision !== this.#clipboardRevision) return
+      this.clipboardPaths = clipboard?.[0] ?? []
+      this.clipboardMode = clipboard ? (clipboard[1] ? 'cut' : 'copy') : null
+    } catch (error) {
+      if (revision !== this.#clipboardRevision) return
+      this.clipboardPaths = []
+      this.clipboardMode = null
+      if (forPaste) throw error
+    }
   }
 
   copySelection() {
@@ -325,6 +337,7 @@ class FileOperations {
   }
 
   async rename(path: string, name: string = this.renameDraft) {
+    if (this.renamingPath !== path) return
     this.renamingPath = null
 
     const entry = this.entries.find((candidate) => candidate.path === path)
@@ -478,15 +491,32 @@ class FileOperations {
   }
 
   async paste() {
-    await this.syncFromDesktopClipboard()
-    if (!this.canPaste) return
-
-    await this.beginTransfer(this.clipboardPaths, this.directoryPath, this.clipboardMode === 'cut')
+    await this.pasteTo(this.directoryPath)
   }
 
   async pasteTo(destinationPath: string) {
-    if (this.clipboardMode === null || this.clipboardPaths.length === 0) return
-    await this.beginTransfer(this.clipboardPaths, destinationPath, this.clipboardMode === 'cut')
+    if (!destinationPath || this.#isPasting) return
+    this.#isPasting = true
+    const destinationNavigation = tabs.active
+    try {
+      await this.syncFromDesktopClipboard(true)
+      if (this.clipboardMode !== null && this.clipboardPaths.length > 0) {
+        await this.beginTransfer([...this.clipboardPaths], destinationPath, this.clipboardMode === 'cut')
+        return
+      }
+      this.error = null
+      const path = await invoke<string | null>('paste_clipboard_image', { destinationPath })
+      if (!path) {
+        this.error = 'The clipboard contains no files or supported image. Copy files or an image, then paste again.'
+        return
+      }
+      this.#record({ kind: 'copy', results: [{ sourcePath: path, destinationPath: path, skipped: false }] })
+      if (destinationNavigation.directoryPath === destinationPath) destinationNavigation.reveal(destinationPath, [path])
+    } catch (error) {
+      this.error = readableError(error, 'Unable to paste from the clipboard.')
+    } finally {
+      this.#isPasting = false
+    }
   }
 
   async compressSelection() {

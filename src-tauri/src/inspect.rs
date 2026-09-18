@@ -1,6 +1,6 @@
 use crate::{error::DirectoryError, paths::resolve_navigable_path};
 use serde::Serialize;
-use std::{fs, os::unix::fs::{MetadataExt, PermissionsExt}, path::Path, time::UNIX_EPOCH};
+use std::{fs, io::Read, os::unix::fs::{MetadataExt, PermissionsExt}, path::Path, time::UNIX_EPOCH};
 
 const MAX_TEXT_PREVIEW_BYTES: u64 = 48 * 1024;
 
@@ -71,9 +71,13 @@ fn text_preview(path: &Path, size: u64) -> (Option<String>, bool) {
         return (None, false);
     }
 
-    let Ok(bytes) = fs::read(path) else {
+    let Ok(file) = fs::File::open(path) else {
         return (None, false);
     };
+    let mut bytes = Vec::new();
+    if file.take(MAX_TEXT_PREVIEW_BYTES + 1).read_to_end(&mut bytes).is_err() {
+        return (None, false);
+    }
     let shown = bytes.len().min(MAX_TEXT_PREVIEW_BYTES as usize);
     let Ok(text) = std::str::from_utf8(&bytes[..shown]) else {
         return (None, false);
@@ -113,16 +117,16 @@ pub(crate) fn inspect_path(path: String) -> Result<PathInspection, DirectoryErro
     let target = resolve_navigable_path(&path)?;
     let metadata = target
         .metadata()
-        .map_err(|_| DirectoryError::unavailable())?;
+        .map_err(DirectoryError::from)?;
     let is_directory = metadata.is_dir();
     let (size, item_count) = if is_directory { folder_size(&target) } else { (metadata.len(), 1) };
-    let (preview, preview_truncated) = (!is_directory)
+    let (preview, preview_truncated) = metadata.is_file()
         .then(|| text_preview(&target, metadata.len()))
         .unwrap_or((None, false));
     // Media itself is served through Tauri's scoped asset protocol, rather
     // than copying whole files into an IPC/Base64 response. That keeps large
     // photos and videos previewable without a size cap or UI memory spike.
-    let media_type = (!is_directory).then(|| media_type(&target).map(str::to_owned)).flatten();
+    let media_type = metadata.is_file().then(|| media_type(&target).map(str::to_owned)).flatten();
 
     Ok(PathInspection {
         name: target
@@ -155,5 +159,27 @@ mod tests {
 
         assert_eq!(name_for_id(table, 1000).as_deref(), Some("dave"));
         assert_eq!(name_for_id(table, 7), None);
+    }
+
+    #[test]
+    fn special_files_have_no_content_preview() {
+        let root = tempfile::tempdir().unwrap();
+        let socket = root.path().join("socket.png");
+        let _listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        let item = super::inspect_path(socket.to_string_lossy().into_owned()).unwrap();
+        assert!(item.preview.is_none());
+        assert!(item.media_type.is_none());
+    }
+
+    #[test]
+    fn text_preview_is_bounded_and_remains_plain_text() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("page.html");
+        let text = "<script>alert(1)</script>".repeat(4096);
+        std::fs::write(&path, text).unwrap();
+        let item = super::inspect_path(path.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(item.preview.unwrap().len(), super::MAX_TEXT_PREVIEW_BYTES as usize);
+        assert!(item.preview_truncated);
+        assert!(item.media_type.is_none());
     }
 }

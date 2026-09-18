@@ -4,6 +4,7 @@
   import { formatItems } from '../../format'
   import type { SortKey, Theme } from '../../appState.svelte'
   import { tabs } from '../../tabs.svelte'
+  import DesktopIntegration from './DesktopIntegration.svelte'
 
   const themes: Array<{ value: Theme; label: string }> = [
     { value: 'system', label: 'System' },
@@ -37,6 +38,7 @@
 </script>
 
 <div class="settings">
+  <DesktopIntegration />
   <section class="settings__group" aria-labelledby="settings-appearance">
     <h2 id="settings-appearance" class="settings__heading">Appearance</h2>
 
@@ -58,6 +60,23 @@
           </button>
         {/each}
       </div>
+    </div>
+    <div class="settings__row">
+      <label class="settings__label" for="setting-font-size">
+        <span>Font size</span>
+        <span class="settings__hint">Changes text size throughout Omafil.</span>
+      </label>
+      <select
+        id="setting-font-size"
+        class="settings__select"
+        value={appState.settings.fontScale}
+        onchange={(event) => appState.update({ fontScale: Number(event.currentTarget.value) })}
+      >
+        <option value={90}>Smaller (90%)</option>
+        <option value={100}>Default (100%)</option>
+        <option value={115}>Larger (115%)</option>
+        <option value={125}>Largest (125%)</option>
+      </select>
     </div>
   </section>
 

@@ -19,7 +19,7 @@ export function folderMenuItems(path: string, { onRename, onChanged }: FolderMen
 
   return [
     { kind: 'action', label: 'Open', onSelect: () => active.open(path) },
-    { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.open(); tabs.active.open(path) } },
+    { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.openPath(path) } },
     { kind: 'action', label: 'Open in terminal', shortcut: 'F4', onSelect: () => active.openTerminal(path) },
     { kind: 'action', label: 'Open externally', onSelect: () => active.openExternally(path) },
     { kind: 'separator' },
@@ -27,7 +27,7 @@ export function folderMenuItems(path: string, { onRename, onChanged }: FolderMen
     { kind: 'separator' },
     { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: () => fileOperations.cutPaths([path]) },
     { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => fileOperations.copyPaths([path]) },
-    { kind: 'action', label: 'Paste into folder', shortcut: 'Ctrl+V', disabled: !fileOperations.canPaste, onSelect: () => fileOperations.pasteTo(path) },
+    { kind: 'action', label: 'Paste into folder', shortcut: 'Ctrl+V', disabled: fileOperations.isBusy, onSelect: () => fileOperations.pasteTo(path) },
     { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(path) },
     { kind: 'separator' },
     { kind: 'action', label: 'Compress to ZIP', onSelect: () => fileOperations.compressPaths([path], parentOf(path)) },

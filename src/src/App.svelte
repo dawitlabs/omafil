@@ -14,16 +14,17 @@
   import { appState } from './lib/appState.svelte'
   import { driveStore } from './lib/drives.svelte'
   import { fileOperations } from './lib/fileOperations.svelte'
+  import ShareDialog from './lib/components/ShareDialog/ShareDialog.svelte'
+  import { sharing } from './lib/sharing.svelte'
   import { tabs } from './lib/tabs.svelte'
+  import { listenForDesktopOpening } from './lib/desktopOpening'
   import type { Navigation } from './lib/navigation.svelte'
 
   let watchedKey = ''
 
   onMount(() => {
     void appState.load()
-    void invoke<string | null>('startup_path').then((path) => {
-      if (path) tabs.active.open(path)
-    })
+    const stopDesktopOpening = listenForDesktopOpening()
     const reloadTimers = new Map<string, ReturnType<typeof setTimeout>>()
     const visiblePanes = () => [tabs.tab, tabs.tab.split].filter((pane): pane is Navigation => pane !== null)
 
@@ -65,6 +66,7 @@
     })
 
     return () => {
+      void stopDesktopOpening.then((stop) => stop())
       void stopListening.then((stop) => stop())
       void stopOperationListening.then((stop) => stop())
       void stopThemeListening.then((stop) => stop())
@@ -94,6 +96,12 @@
   <Sidebar />
 
   <main class="app-main">
+    {#if fileOperations.error || tabs.error}
+      <div class="file-list__error" role="alert">
+        <p>{fileOperations.error ?? tabs.error}</p>
+        <button class="home-view__retry" type="button" onclick={() => { fileOperations.error = null; tabs.error = null }}>Dismiss</button>
+      </div>
+    {/if}
     <Home />
   </main>
 
@@ -112,6 +120,10 @@
   {/if}
   {#if fileOperations.bulkRenamePaths}
     <BulkRename paths={fileOperations.bulkRenamePaths} onclose={() => fileOperations.hideBulkRename()} />
+  {/if}
+
+  {#if sharing.paths}
+    <ShareDialog />
   {/if}
 
   <OperationQueue />

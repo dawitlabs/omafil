@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { sharing } from '../../sharing.svelte'
   import { fileOperations } from '../../fileOperations.svelte'
   import { tabs } from '../../tabs.svelte'
 
@@ -20,6 +21,7 @@
   <span class="file-commands__divider" aria-hidden="true"></span>
   <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => fileOperations.cutSelection()}>Cut</button>
   <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => fileOperations.copySelection()}>Copy</button>
+  <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => sharing.open(fileOperations.selectedPaths)}>Share</button>
   <button class="file-commands__button" type="button" disabled={!fileOperations.canPaste} onclick={() => fileOperations.paste()}>Paste</button>
   <span class="file-commands__divider" aria-hidden="true"></span>
   <button class="file-commands__button" type="button" disabled={!hasSelection} onclick={() => fileOperations.startRenaming()}>Rename</button>

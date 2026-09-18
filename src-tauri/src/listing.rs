@@ -201,11 +201,11 @@ fn read_unstated_entries(
     directory: &Path,
     show_hidden: bool,
     filter: &str,
-) -> Result<Vec<UnstatedEntry>, ()> {
+) -> std::io::Result<Vec<UnstatedEntry>> {
     let mut entries = Vec::new();
 
-    for directory_entry in fs::read_dir(directory).map_err(|_| ())? {
-        let directory_entry = directory_entry.map_err(|_| ())?;
+    for directory_entry in fs::read_dir(directory)? {
+        let directory_entry = directory_entry?;
 
         let Some(entry) = UnstatedEntry::read(&directory_entry) else {
             continue;
@@ -227,6 +227,7 @@ fn page<T>(entries: Vec<T>, offset: usize, page_size: usize) -> Vec<T> {
 
 /// Returns one page of matching entries and how many matched, statting every
 /// entry only when the sort column needs it. See [`EntrySort::needs_metadata`].
+#[cfg(test)]
 pub(crate) fn read_directory_page(
     directory: &Path,
     sort: EntrySort,
@@ -235,18 +236,32 @@ pub(crate) fn read_directory_page(
     offset: usize,
     page_size: usize,
     filter: &str,
-) -> Result<(Vec<DirectoryEntry>, usize), ()> {
-    let mut unstated = read_unstated_entries(directory, show_hidden, filter)?;
+) -> std::io::Result<(Vec<DirectoryEntry>, usize)> {
+    read_directory_page_revealing(directory, sort, descending, show_hidden, offset, page_size, filter, &[])
+}
+
+fn read_directory_page_revealing(
+    directory: &Path, sort: EntrySort, descending: bool, show_hidden: bool,
+    offset: usize, page_size: usize, filter: &str, reveal_paths: &[String],
+) -> std::io::Result<(Vec<DirectoryEntry>, usize)> {
+    let requested_paths: std::collections::HashSet<&Path> = reveal_paths.iter().map(Path::new).collect();
+    let requested = |path: &Path| requested_paths.contains(path);
+    let mut unstated = read_unstated_entries(directory, show_hidden || !reveal_paths.is_empty(), filter)?;
+    if !show_hidden {
+        unstated.retain(|entry| !entry.name.starts_with('.') || requested(&entry.path));
+    }
     let total = unstated.len();
 
     if sort.needs_metadata() {
         let mut entries: Vec<DirectoryEntry> = unstated.into_iter().map(UnstatedEntry::stat).collect();
-        entries.sort_by(|left, right| compare_entries(left, right, sort, descending));
+        entries.sort_by(|left, right| requested(Path::new(&right.path)).cmp(&requested(Path::new(&left.path)))
+            .then_with(|| compare_entries(left, right, sort, descending)));
 
         return Ok((page(entries, offset, page_size), total));
     }
 
-    unstated.sort_by(|left, right| compare_unstated(left, right, sort, descending));
+    unstated.sort_by(|left, right| requested(&right.path).cmp(&requested(&left.path))
+        .then_with(|| compare_unstated(left, right, sort, descending)));
 
     let entries = page(unstated, offset, page_size)
         .into_iter()
@@ -261,7 +276,7 @@ pub(crate) fn read_directory_page(
 pub(crate) fn read_subdirectories(path: &str, show_hidden: bool) -> Result<Vec<PathCrumb>, DirectoryError> {
     let directory = resolve_navigable_path(path)?;
     let mut folders: Vec<PathCrumb> = fs::read_dir(&directory)
-        .map_err(|_| DirectoryError::read_failed())?
+        .map_err(DirectoryError::from)?
         .flatten()
         .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
         .map(|entry| PathCrumb {
@@ -306,7 +321,7 @@ pub(crate) fn describe_path(path: String) -> Result<DirectoryEntry, DirectoryErr
     let target = resolve_navigable_path(&path)?;
     let metadata = target
         .symlink_metadata()
-        .map_err(|_| DirectoryError::unavailable())?;
+        .map_err(DirectoryError::from)?;
 
     Ok(DirectoryEntry {
         name: display_name(&target),
@@ -325,6 +340,7 @@ pub(crate) fn describe_path(path: String) -> Result<DirectoryEntry, DirectoryErr
     })
 }
 
+#[cfg(test)]
 pub(crate) fn read_directory_listing(
     path: String,
     sort: EntrySort,
@@ -334,6 +350,16 @@ pub(crate) fn read_directory_listing(
     limit: usize,
     filter: &str,
 ) -> Result<DirectoryListing, DirectoryError> {
+    read_directory_listing_revealing(path, sort, descending, show_hidden, offset, limit, filter, &[])
+}
+
+pub(crate) fn read_directory_listing_revealing(
+    path: String, sort: EntrySort, descending: bool, show_hidden: bool,
+    offset: usize, limit: usize, filter: &str, reveal_paths: &[String],
+) -> Result<DirectoryListing, DirectoryError> {
+    if reveal_paths.len() > crate::desktop_requests::MAX_TARGETS {
+        return Err(DirectoryError::detail("Too many items to reveal."));
+    }
     let directory = resolve_navigable_path(&path)?;
 
     if !directory.is_dir() {
@@ -342,8 +368,8 @@ pub(crate) fn read_directory_listing(
 
     let page_size = limit.clamp(1, MAX_PAGE_SIZE);
     let (entries, total) =
-        read_directory_page(&directory, sort, descending, show_hidden, offset, page_size, filter)
-            .map_err(|_| DirectoryError::read_failed())?;
+        read_directory_page_revealing(&directory, sort, descending, show_hidden, offset, page_size, filter, reveal_paths)
+            .map_err(DirectoryError::from)?;
     let has_more = offset.saturating_add(page_size) < total;
 
     Ok(DirectoryListing {
@@ -357,6 +383,26 @@ pub(crate) fn read_directory_listing(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn reveals_hidden_and_later_items_without_breaking_pagination() {
+        use super::*;
+        let root = tempfile::tempdir().unwrap();
+        for name in ["a", "b", "c", "z", ".requested", ".hidden"] {
+            std::fs::write(root.path().join(name), name).unwrap();
+        }
+        let reveal = vec![root.path().join("z").to_str().unwrap().to_owned(), root.path().join(".requested").to_str().unwrap().to_owned()];
+        for sort in [EntrySort::Name, EntrySort::Size, EntrySort::Modified, EntrySort::Type] {
+            let (first, total) = read_directory_page_revealing(root.path(), sort, false, false, 0, 2, "", &reveal).unwrap();
+            assert_eq!(total, 5);
+            assert!(first.iter().all(|entry| reveal.contains(&entry.path)));
+            let (rest, _) = read_directory_page_revealing(root.path(), sort, false, false, 2, 10, "", &reveal).unwrap();
+            assert_eq!(rest.len(), 3);
+            assert!(rest.iter().all(|entry| !reveal.contains(&entry.path)));
+        }
+        let (_, total) = read_directory_page(root.path(), EntrySort::Name, false, false, 0, 10, "").unwrap();
+        assert_eq!(total, 4);
+    }
+
     use super::{
         compare_entries, compare_unstated, entry_extension, matches_filter, path_crumbs,
         read_directory_page, DirectoryEntry, DirectoryEntryType, EntrySort, UnstatedEntry,
@@ -397,6 +443,27 @@ mod tests {
         let roots = vec![PathBuf::from("/home/dave")];
 
         assert!(path_crumbs(Path::new("/etc/ssh"), &roots).is_empty());
+    }
+
+    #[test]
+    fn system_breadcrumbs_reach_filesystem_root() {
+        let crumbs = path_crumbs(Path::new("/etc/ssh"), &crate::paths::navigable_roots());
+        assert_eq!(crumbs.iter().map(|crumb| crumb.path.as_str()).collect::<Vec<_>>(), ["/", "/etc", "/etc/ssh"]);
+    }
+
+    #[test]
+    fn denied_listing_reports_permissions_instead_of_empty_results() {
+        use std::{fs, os::unix::fs::PermissionsExt};
+        let root = tempfile::tempdir().unwrap();
+        fs::set_permissions(root.path(), fs::Permissions::from_mode(0)).unwrap();
+        let result = super::read_directory_listing(root.path().to_string_lossy().into_owned(), EntrySort::Name, false, false, 0, 100, "");
+        // Restore even if the assertion fails so fixture cleanup stays possible.
+        let denied = fs::read_dir(root.path()).is_err();
+        fs::set_permissions(root.path(), fs::Permissions::from_mode(0o700)).unwrap();
+        if denied {
+            let error = result.err().expect("denied listing must fail");
+            assert_eq!(serde_json::to_value(error).unwrap()["code"], "permission_denied");
+        }
     }
 
     #[test]

@@ -64,7 +64,7 @@
   border-radius: 6px 6px 0 0;
   color: inherit;
   background: transparent;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: left;
   cursor: pointer;
 }
@@ -204,7 +204,7 @@
   overflow-y: hidden;
   scrollbar-width: none;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
   white-space: nowrap;
 }
 
@@ -227,7 +227,7 @@
   outline: 0;
   color: var(--text-primary);
   background: var(--surface-input);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .app-header__crumb {
@@ -242,7 +242,7 @@
   border-radius: 4px;
   color: inherit;
   background: transparent;
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 
@@ -294,7 +294,7 @@
   outline: 0;
   color: var(--text-primary);
   background: transparent;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .app-header__search input:disabled {

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { tick } from 'svelte'
+  import { onDestroy, tick } from 'svelte'
   import { appState } from '../../appState.svelte'
-  import { convertFileSrc, invoke } from '@tauri-apps/api/core'
+  import { mediaPreviewSource, pdfPreviewSource, thumbnailSource as systemThumbnail } from '../../preview'
   import { fileIcon, folderIcon, folderThemeName } from '../../fileIcons'
   import { fileOperations } from '../../fileOperations.svelte'
   import { formatBytes, formatModified, parentFolder, typeLabel } from '../../format'
@@ -38,20 +38,48 @@
   const themedIcon = $derived(appState.themeIconFor(isDirectory ? folderThemeName(entry.name) : icon.themeName))
   const isRenaming = $derived(fileOperations.renamingPath === entry.path)
   const imageFile = $derived(/\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(entry.name))
-  let pdfThumbnail = $state<string | null>(null)
-  const thumbnailSource = $derived(imageFile ? convertFileSrc(entry.path) : pdfThumbnail)
+  let thumbnailSource = $state<string | null>(null)
 
   $effect(() => {
-    pdfThumbnail = null
-    if (!previewMode || !/\.pdf$/i.test(entry.name)) return
+    thumbnailSource = null
+    if (!previewMode || isDirectory) return
     const target = entry.path
-
-    invoke<string>('pdf_preview', { path: target })
-      .then((rendered) => {
-        if (entry.path === target) pdfThumbnail = convertFileSrc(rendered)
-      })
-      .catch(() => undefined)
+    const load = imageFile ? mediaPreviewSource : /\.pdf$/i.test(entry.name) ? pdfPreviewSource : systemThumbnail
+    let cancelled = false
+    load(target).then((source) => { if (!cancelled) thumbnailSource = source }).catch(() => undefined)
+    return () => { cancelled = true }
   })
+  let renameTimer: ReturnType<typeof setTimeout> | null = null
+  let canRenameOnClick = false
+
+  function cancelRenameClick() {
+    if (renameTimer !== null) clearTimeout(renameTimer)
+    renameTimer = null
+  }
+
+  onDestroy(cancelRenameClick)
+
+  function activate(event: PointerEvent) {
+    cancelRenameClick()
+    canRenameOnClick = event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey
+      && fileOperations.selectedPaths.length === 1 && fileOperations.isSelected(entry.path)
+      && event.target instanceof Element && Boolean(event.target.closest('.file-row__label'))
+    onactivate(event)
+  }
+
+  function clickName(event: MouseEvent) {
+    if (!canRenameOnClick || event.detail !== 1 || isRenaming) return
+    const row = event.currentTarget as HTMLElement
+    // Wait for a possible double click before replacing the label with an input.
+    renameTimer = setTimeout(() => {
+      renameTimer = null
+      if (row.contains(document.activeElement) && fileOperations.selectedPaths.length === 1
+        && fileOperations.isSelected(entry.path) && !fileOperations.renamingPath) {
+        fileOperations.startRenaming(entry.path)
+      }
+    }, 550)
+  }
+
   let renameInput = $state<HTMLInputElement | null>(null)
 
   $effect(() => {
@@ -71,16 +99,19 @@
   data-path={entry.path}
   data-index={index}
   role="option"
+  aria-label={entry.name}
   aria-selected={fileOperations.isSelected(entry.path)}
   tabindex={isActive ? 0 : -1}
-  onpointerdown={onactivate}
-  ondblclick={onopen}
+  onpointerdown={activate}
+  onclick={clickName}
+  onkeydown={cancelRenameClick}
+  ondblclick={() => { cancelRenameClick(); if (!isRenaming) onopen() }}
   oncontextmenu={(event) => {
     event.preventDefault()
     onmenu(event)
   }}
   draggable={!isRenaming}
-  ondragstart={ondragstart}
+  ondragstart={(event) => { cancelRenameClick(); ondragstart(event) }}
   ondragover={ondragover}
   ondrop={ondrop}
 >
@@ -105,8 +136,15 @@
       onpointerdown={(event) => event.stopPropagation()}
       onblur={() => fileOperations.rename(entry.path)}
       onkeydown={(event) => {
-        if (event.key === 'Enter') fileOperations.rename(entry.path)
-        else if (event.key === 'Escape') fileOperations.cancelRenaming()
+        event.stopPropagation()
+        if (event.isComposing) return
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          void fileOperations.rename(entry.path)
+        } else if (event.key === 'Escape') {
+          event.preventDefault()
+          fileOperations.cancelRenaming()
+        }
       }}
     />
   {:else}

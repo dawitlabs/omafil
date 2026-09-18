@@ -3,33 +3,82 @@
   <head><meta charset="UTF-8" /><title>preview</title>
     <script>
       const GB = 1024 ** 3, HOME = '/home/dave', now = Math.floor(Date.now() / 1000)
-      const raw = { [HOME]: [['Documents', 'd', 0, now - 900], ['.config', 'd', 0, now - 1200], ['.bashrc', 'f', 220, now - 1800]],
+      const raw = { '/': [['etc', 'd', 0, now], ['home', 'd', 0, now]], '/etc': [['hosts', 'f', 120, now]], '/home': [['dave', 'd', 0, now]],
+        [HOME]: [['Documents', 'd', 0, now - 900], ['.config', 'd', 0, now - 1200], ['.bashrc', 'f', 220, now - 1800]],
         [`${HOME}/.config`]: [],
         [`${HOME}/Documents`]: [['budget.xlsx', 'f', 1048576, now - 600], ['read.pdf', 'f', 15938417, now - 86400], ['notes.txt', 'f', 512, now - 300], ['.draft.txt', 'f', 64, now - 120]] }
       const params = new URLSearchParams(location.search)
       let stored = { pins: [], tags: [{ id: 'design', label: 'Design', color: '#f5342e' }, { id: 'dev', label: 'Dev', color: '#ffc72c' }],
         tagged: { [`${HOME}/Documents/budget.xlsx`]: ['design'], [`${HOME}/Documents/read.pdf`]: ['dev'], '/home/dave/Gone/missing.txt': ['design'] },
         settings: { showHidden: false, theme: params.get('theme') ?? 'light', defaultSort: 'name', defaultDescending: false, vimKeys: Boolean(params.get('vim')) } }
+      if (params.has('persistSettings')) stored.settings = JSON.parse(sessionStorage.getItem('preview-settings') ?? 'null') ?? stored.settings
+      let clipboard = null
+      const clipboardCalls = []
+      const serviceCalls = []
+      const searchCalls = []
+      window.__searchCalls = () => searchCalls
+      const servicePending = new Map()
+      window.__serviceCalls = () => serviceCalls
+      window.__setClipboard = (value) => { clipboard = value }
+      window.__clipboardCalls = () => clipboardCalls
       const cut = (full) => full.slice(0, full.lastIndexOf('/'))
       const base = (full) => full.slice(full.lastIndexOf('/') + 1)
       const bin = []
-      const mk = (p, [name, kind, size, modified]) => ({ name, path: `${p}/${name}`, entryType: kind === 'd' ? 'directory' : 'file', size, modified })
+      const mk = (p, [name, kind, size, modified]) => ({ name, path: `${p.replace(/\/$/, '')}/${name}`, entryType: kind === 'd' ? 'directory' : 'file', size, modified })
       const listeners = {}
+      let desktopIntegration = { isDefault: false, canEnable: !params.has('notInstalled'), canRestore: false, activationInstalled: false, serviceActive: false, reason: params.has('notInstalled') ? 'Install this version of Omafil and launch it from your app menu before making it the default.' : null }
+      let openingRequests = params.has('openingError')
+        ? [{ targets: [], error: 'This requested folder is unavailable.' }]
+        : params.has('reveal')
+          ? [{ targets: [{ folder: `${HOME}/Documents`, selection: [`${HOME}/Documents/.draft.txt`, `${HOME}/Documents/read.pdf`], properties: null }], error: null }]
+          : []
       let recent = [{ name: 'notes.txt', path: `${HOME}/Documents/notes.txt`, parentDirectory: `${HOME}/Documents` }, { name: 'shot.png', path: `${HOME}/Pictures/shot.png`, parentDirectory: `${HOME}/Pictures` }]
       const mock = {
-        resolve_location: (a) => (a.location === 'home' ? HOME : `${HOME}/${a.location[0].toUpperCase()}${a.location.slice(1)}`),
-        list_directory: (a) => { const rows = [...(raw[a.path] ?? [])].filter((r) => (a.showHidden || !r[0].startsWith('.')) && (!a.filter || r[0].toLowerCase().includes(a.filter.toLowerCase()))).sort((x, y) => ((y[1] === 'd') - (x[1] === 'd')) || x[0].localeCompare(y[0]))
-          return { path: a.path, total: rows.length,
-            crumbs: [HOME, ...a.path.slice(HOME.length).split('/').filter(Boolean).map((_, i, x) => `${HOME}/${x.slice(0, i + 1).join('/')}`)].map((p) => ({ name: p.split('/').filter(Boolean).at(-1), path: p })),
-            entries: rows.map((r) => mk(a.path, r)) } },
+        linux_service: (a) => {
+          serviceCalls.push(a)
+          if (params.has('missingServices')) throw { message: 'LocalSearch is unavailable. Filename search is still available.' }
+          const p = a.payload
+          if (a.operation === 'capabilities') return { schemes: params.has('minimalBackends') ? ['file', 'sftp'] : ['file', 'sftp', 'smb', 'dav', 'davs', 'ftp', 'ftps', 'mtp'], indexedSearch: true }
+          if (a.operation === 'mounts') return params.has('noDevices') ? [] : [{ name: 'Test phone', uri: 'mtp://[usb:001,002]/', mounted: false, canUnmount: false }]
+          if (a.operation === 'connect') {
+            if (p.uri.includes('@')) throw { message: 'Enter the server address without credentials.' }
+            if (params.has('slowService')) return new Promise((resolve, reject) => {
+              const timer = setTimeout(() => { servicePending.delete(a.id); resolve({ uri: p.uri }) }, 6000)
+              servicePending.set(a.id, () => { clearTimeout(timer); reject({ message: 'Operation cancelled.' }) })
+            })
+            return { uri: p.uri }
+          }
+          if (a.operation === 'list') return { uri: p.location.uri, parent: p.location.uri.endsWith('/Documents') ? 'sftp://test/' : null, truncated: params.has('largeRemote'), entries: p.location.uri.endsWith('/Documents') ? [] : [
+            { uri: p.location.uri + 'Documents', name: 'Documents', isDirectory: true, isRegular: false, size: 0, modified: now },
+            { uri: p.location.uri + 'report.txt', name: 'report.txt', isDirectory: false, isRegular: true, size: 128, modified: now },
+          ] }
+          if (a.operation === 'copy') return { copied: a.payload.sources.length, failures: [] }
+          if (a.operation === 'indexed-search') return { entries: [mk(`${HOME}/Documents`, raw[`${HOME}/Documents`].find((r) => r[0] === 'notes.txt'))], truncated: params.has('limitedIndex'), skipped: 0 }
+          return null
+        },
+        cancel_linux_service: (a) => { servicePending.get(a.id)?.(); servicePending.delete(a.id); return null },
+        desktop_integration_status: () => desktopIntegration,
+        configure_desktop_integration: (a) => {
+          if (params.has('integrationError')) throw 'Desktop settings could not be written. Previous settings were kept.'
+          desktopIntegration = { ...desktopIntegration, isDefault: a.enabled, canRestore: a.enabled, activationInstalled: a.enabled, serviceActive: a.enabled }
+          return desktopIntegration
+        },
+        resolve_location: (a) => { if (params.get('disabled') === a.location) throw { message: 'This standard folder is disabled.' }; return a.location === 'home' ? HOME : `${HOME}/${a.location[0].toUpperCase()}${a.location.slice(1)}` },
+        list_directory: (a) => { const revealed = (r) => (a.revealPaths ?? []).includes(`${a.path}/${r[0]}`)
+          const rows = [...(raw[a.path] ?? [])].filter((r) => (a.showHidden || !r[0].startsWith('.') || revealed(r)) && (!a.filter || r[0].toLowerCase().includes(a.filter.toLowerCase()))).sort((x, y) => Number(revealed(y)) - Number(revealed(x)) || ((y[1] === 'd') - (x[1] === 'd')) || x[0].localeCompare(y[0]))
+          const listing = { path: a.path, total: rows.length,
+            crumbs: ['/', ...a.path.split('/').filter(Boolean).map((_, i, x) => `/${x.slice(0, i + 1).join('/')}`)].map((p) => ({ name: p.split('/').filter(Boolean).at(-1) ?? '/', path: p })),
+            entries: rows.map((r) => mk(a.path, r)) }
+          return params.has('slowFolder') && a.path === `${HOME}/Pictures` ? new Promise((resolve) => setTimeout(() => resolve(listing), 1800)) : listing },
         rename_path: (a) => { const p = a.path.slice(0, a.path.lastIndexOf('/')), old = a.path.slice(p.length + 1)
           raw[p] = raw[p].map((r) => (r[0] === old ? [a.name, r[1], r[2], r[3]] : r)); return `${p}/${a.name}` },
         describe_path: (a) => { const p = a.path.slice(0, a.path.lastIndexOf('/')), n = a.path.slice(p.length + 1)
           const r = (raw[p] ?? []).find((x) => x[0] === n); if (!r) throw { message: 'gone' }; return mk(p, r) },
-        search_files: () => ({ entries: [], truncated: false }),
+        preview_asset: (a) => a.path,
+        search_files: (a) => { searchCalls.push(a); return { entries: [], truncated: false, skipped: params.has('partialSearch') ? 1 : 0 } },
         list_subdirectories: (a) => (raw[a.path] ?? []).filter((r) => r[1] === 'd' && (a.showHidden || !r[0].startsWith('.'))).map((r) => ({ name: r[0], path: `${a.path}/${r[0]}` })),
         watch_directories: () => null, unwatch_directory: () => null,
-        load_state: () => stored, save_state: (a) => { stored = a.state; return null },
+        load_state: () => stored, save_state: (a) => { stored = a.state; if (params.has('persistSettings')) sessionStorage.setItem('preview-settings', JSON.stringify(stored.settings)); return null },
         open_path: () => null,
         new_directory: (a) => { raw[a.parentPath] = [...(raw[a.parentPath] ?? []), [a.name, 'd', 0, now]]; raw[`${a.parentPath}/${a.name}`] = []; return `${a.parentPath}/${a.name}` },
         trash_paths: (a) => a.paths.map((full) => { const p = cut(full), n = base(full), r = (raw[p] ?? []).find((x) => x[0] === n)
@@ -48,10 +97,24 @@
           return { name: n, path: a.path, entryType: r[1] === 'd' ? 'folder' : 'file', size: r[2], itemCount: 1, modified: r[3], created: r[3], preview: n.endsWith('.txt') ? 'hello' : null, previewTruncated: false, mediaPreview: null, mediaType: null, mode: 0o644, owner: 'dave', group: 'dave' } },
         set_permissions: () => null,
         list_openers: () => [{ id: 'nvim.desktop', name: 'Neovim', isDefault: true }, { id: 'code.desktop', name: 'Visual Studio Code', isDefault: false }, { id: 'gimp.desktop', name: 'GIMP', isDefault: false }],
-        open_with: () => null, set_default_opener: () => null, pdf_preview: () => null, report_client_error: () => null,
+        open_with: () => null, set_default_opener: () => null, pdf_preview: () => null, thumbnail: () => null, report_client_error: () => null,
         mount_drive: () => '/run/media/dave/STICK', unmount_drive: () => null, eject_drive: () => null, format_drive: () => null,
-        read_file_clipboard: () => null, write_file_clipboard: () => null,
-        startup_path: () => null, theme_icons: () => null,
+        read_file_clipboard: () => { if (clipboard?.error) throw { message: 'Clipboard service unavailable.' }; return clipboard?.paths ? [clipboard.paths, Boolean(clipboard.isCut)] : null },
+        write_file_clipboard: (a) => params.has('slowClipboard') ? new Promise((resolve) => setTimeout(() => { clipboard = a; resolve(null) }, 400)) : (clipboard = a, null),
+        paste_clipboard_image: (a) => {
+          if (!clipboard?.image) return null
+          let name = 'Clipboard image.png', n = 2
+          while ((raw[a.destinationPath] ?? []).some((r) => r[0] === name)) name = `Clipboard image (${n++}).png`
+          raw[a.destinationPath] = [...(raw[a.destinationPath] ?? []), [name, 'f', 128, now]]
+          return `${a.destinationPath}/${name}`
+        },
+        queue_transfer: (a) => { clipboardCalls.push(a); return { id: `transfer-${clipboardCalls.length}` } },
+        airdrop_availability: () => {
+          if (params.get('airdropError')) throw { message: 'Unable to check AirDrop availability.' }
+          const result = { available: false, reason: { code: 'transport_unavailable', message: 'AirDrop is not available in this version of Omafil. Native iPhone discovery and transfers are not supported yet.' } }
+          return params.get('airdropSlow') ? new Promise((resolve) => setTimeout(() => resolve(result), 6000)) : result
+        },
+        take_open_requests: () => { const requests = openingRequests; openingRequests = []; return requests }, theme_icons: () => null,
         read_omarchy_theme: () => (params.get('omarchy') ? { mode: 'dark', accent: '#f38d70', selection: '#403e41', muted: '#72696a', background: '#2c2525',
           dark_background: '#211c1c', darker_background: '#1a1616', lighter_background: '#3d2f2a', foreground: '#e6d9db', dark_foreground: '#72696a',
           light_foreground: '#c3b7b8', red: '#fd6883', yellow: '#f9cc6c', blue: '#85dacc', green: '#adda78' } : null),
@@ -62,6 +125,11 @@
           if (c === 'plugin:event|unlisten') return Promise.resolve(null)
           try { return Promise.resolve(mock[c] ? mock[c](a ?? {}) : []) } catch (e) { return Promise.reject(e) } } }
       window.__tagged = () => JSON.stringify(stored.tagged)
+      window.__openRequests = (requests) => {
+        openingRequests.push(...requests)
+        const handler = listeners['open-requested']
+        if (handler) window[`_${handler}`]({ event: 'open-requested', payload: null })
+      }
       const row = (n) => [...document.querySelectorAll('[data-path]')].find((r) => r.textContent.trim().startsWith(n))
       const acts = {
         nav: (n) => [...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith(n))?.click(),

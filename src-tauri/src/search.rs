@@ -87,6 +87,7 @@ impl SearchGeneration {
 pub(crate) struct SearchResults {
     pub(crate) entries: Vec<DirectoryEntry>,
     pub(crate) truncated: bool,
+    pub(crate) skipped: usize,
 }
 
 /// Case-insensitive glob over a single name. Supports `*` and `?` only, which
@@ -164,6 +165,8 @@ pub(crate) fn search_directory(
     current: Arc<AtomicU64>,
 ) -> Result<SearchResults, DirectoryError> {
     let root = resolve_navigable_path(&path)?;
+    // A failed root must be an error, not a misleading empty search.
+    fs::read_dir(&root)?;
 
     Ok(walk_matches(root, &query, show_hidden, generation, current))
 }
@@ -182,6 +185,7 @@ pub(crate) fn walk_matches(
         return SearchResults {
             entries: Vec::new(),
             truncated: false,
+            skipped: 0,
         };
     }
 
@@ -192,26 +196,34 @@ pub(crate) fn walk_matches(
     let mut matches: Vec<(u32, usize, usize, String, DirectoryEntry)> = Vec::new();
     let mut visits = 0_usize;
     let mut truncated = false;
+    let mut skipped = 0;
 
     'walk: while let Some((directory, depth)) = pending.pop_front() {
         if current.load(Ordering::SeqCst) != generation {
             return SearchResults {
                 entries: Vec::new(),
                 truncated: false,
+                skipped: 0,
             };
         }
 
         let Ok(directory_entries) = fs::read_dir(&directory) else {
+            skipped += 1;
             continue;
         };
 
-        for directory_entry in directory_entries.flatten() {
+        for directory_entry in directory_entries {
+            let Ok(directory_entry) = directory_entry else {
+                skipped += 1;
+                continue;
+            };
             visits += 1;
 
             if visits.is_multiple_of(CANCEL_CHECK_EVERY) && current.load(Ordering::SeqCst) != generation {
                 return SearchResults {
                     entries: Vec::new(),
                     truncated: false,
+                    skipped: 0,
                 };
             }
 
@@ -226,17 +238,19 @@ pub(crate) fn walk_matches(
                 continue;
             }
 
-            let size = directory_entry.metadata().map(|metadata| metadata.len()).unwrap_or_default();
+            // Filters constrain results, never traversal. Otherwise type:image
+            // prunes every ordinary parent folder before reaching its images.
+            match directory_entry.file_type() {
+                Ok(kind) if kind.is_dir() => pending.push_back((directory_entry.path(), depth + 1)),
+                Ok(_) => {}, // Do not descend into symlinks (including cycles).
+                Err(_) => { skipped += 1; continue; }
+            }
+            let size = match directory_entry.metadata() {
+                Ok(metadata) => metadata.len(),
+                Err(_) => { skipped += 1; continue; }
+            };
             if !matches_filter(&filter, &name, size) {
                 continue;
-            }
-
-            // A symlinked directory is not descended into, so a cycle cannot trap the walk.
-            if directory_entry
-                .file_type()
-                .is_ok_and(|file_type| file_type.is_dir())
-            {
-                pending.push_back((directory_entry.path(), depth + 1));
             }
 
             let folded = name.to_lowercase();
@@ -270,6 +284,7 @@ pub(crate) fn walk_matches(
     SearchResults {
         entries: matches.into_iter().map(|(.., entry)| entry).collect(),
         truncated,
+        skipped,
     }
 }
 
@@ -298,6 +313,54 @@ mod tests {
             .into_iter()
             .map(|entry| entry.path().to_owned())
             .collect()
+    }
+
+    #[test]
+    fn search_marks_inaccessible_subfolders_and_preserves_visible_matches() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let denied = root.path().join("private");
+        fs::create_dir(&denied).unwrap();
+        fs::write(root.path().join("visible.txt"), b"visible").unwrap();
+        fs::set_permissions(&denied, fs::Permissions::from_mode(0)).unwrap();
+        let is_denied = fs::read_dir(&denied).is_err();
+        let results = walk_matches(root.path().to_path_buf(), "*.txt", false, 1, Arc::new(AtomicU64::new(1)));
+        fs::set_permissions(&denied, fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(results.entries.len(), 1);
+        if is_denied { assert_eq!(results.skipped, 1); }
+    }
+
+    #[test]
+    fn filtered_search_respects_hidden_folders_and_does_not_follow_cycles() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir(root.path().join(".hidden")).unwrap();
+        fs::write(root.path().join(".hidden/secret.jpg"), b"image").unwrap();
+        std::os::unix::fs::symlink(root.path(), root.path().join("cycle")).unwrap();
+        assert!(search(&root.path().to_path_buf(), "type:image").is_empty());
+        let results = walk_matches(root.path().to_path_buf(), "type:image", true, 1, Arc::new(AtomicU64::new(1)));
+        assert_eq!(results.entries.len(), 1);
+        assert!(!results.truncated);
+    }
+
+    #[test]
+    fn type_filter_reaches_files_in_unmatched_subdirectories() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir_all(root.path().join("photos/summer")).unwrap();
+        fs::write(root.path().join("photos/summer/beach.jpg"), b"image").unwrap();
+        let found = search(&root.path().to_path_buf(), "type:image");
+        assert_eq!(found.len(), 1);
+        assert!(found[0].ends_with("beach.jpg"));
+    }
+
+    #[test]
+    fn size_filter_does_not_prune_small_parent_directories() {
+        let root = tempfile::tempdir().unwrap();
+        fs::create_dir(root.path().join("nested")).unwrap();
+        let file = fs::File::create(root.path().join("nested/large.bin")).unwrap();
+        file.set_len(2 * 1024 * 1024).unwrap();
+        let found = search(&root.path().to_path_buf(), "size:>1mb");
+        assert_eq!(found.len(), 1);
+        assert!(found[0].ends_with("large.bin"));
     }
 
     #[test]

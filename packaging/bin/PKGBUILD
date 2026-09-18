@@ -10,7 +10,15 @@ url="https://github.com/dawitlabs/omafil"
 license=('MIT')
 depends=('webkit2gtk-4.1' 'gtk3' 'poppler' 'udisks2' 'xdg-utils' 'libnotify'
          'libarchive' 'glib2' 'wl-clipboard')
-optdepends=('omarchy: theme and editor integration')
+optdepends=('omarchy: theme and editor integration'
+            'python-gobject: Linux network, device and indexed-search integration'
+            'gvfs: network locations and WebDAV/FTP providers'
+            'gvfs-smb: SMB network shares'
+            'gvfs-mtp: compatible Android USB file transfer'
+            'gvfs-gphoto2: cameras and compatible devices'
+            'gvfs-afc: compatible Apple device access'
+            'localsearch: indexed document content and metadata search'
+            'tinysparql: indexed search service bindings')
 provides=('omafil')
 # The released binary is already stripped, so makepkg would only generate a
 # debug package out of nothing and strip a stripped file.

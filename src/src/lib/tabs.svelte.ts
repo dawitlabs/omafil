@@ -6,6 +6,7 @@ const MAX_TABS = 12
 class Tabs {
   #tabs = $state<Navigation[]>([new Navigation()])
   activeIndex = $state(0)
+  error = $state<string | null>(null)
 
   get all(): Navigation[] {
     return this.#tabs
@@ -79,10 +80,23 @@ class Tabs {
   }
 
   open(navigation = new Navigation()) {
-    if (this.#tabs.length >= MAX_TABS) return
+    if (this.#tabs.length >= MAX_TABS) {
+      this.error = `Omafil can open ${MAX_TABS} tabs at once. Close a tab and open the remaining folders again.`
+      return false
+    }
 
+    this.error = null
     this.#tabs = [...this.#tabs, navigation]
     this.activeIndex = this.#tabs.length - 1
+    this.focusedSide = 'left'
+    return true
+  }
+
+  openPath(path: string) {
+    const navigation = new Navigation()
+    if (!this.open(navigation)) return false
+    navigation.open(path)
+    return true
   }
 
   duplicate() {
@@ -95,10 +109,14 @@ class Tabs {
   }
 
   close(index: number) {
-    if (!this.canClose) return
+    if (!this.canClose || index < 0 || index >= this.#tabs.length) return
 
     this.#tabs = this.#tabs.filter((_, position) => position !== index)
-    this.activeIndex = Math.min(this.activeIndex, this.#tabs.length - 1)
+    if (index < this.activeIndex) this.activeIndex -= 1
+    else if (index === this.activeIndex) {
+      this.activeIndex = Math.min(index, this.#tabs.length - 1)
+      this.focusedSide = 'left'
+    }
   }
 
   /**

@@ -12,7 +12,7 @@
 .settings__heading {
   margin: 0;
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
 }
 
@@ -32,12 +32,12 @@
   display: grid;
   gap: 3px;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 .settings__hint {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .settings__segmented {
@@ -56,7 +56,7 @@
   border-radius: 4px;
   color: var(--text-secondary);
   background: transparent;
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
 }
 
@@ -121,7 +121,7 @@
   border-radius: 4px;
   color: var(--text-primary);
   background: var(--surface-input);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .settings__select {
@@ -163,7 +163,7 @@
 .settings__count {
   flex: none;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .settings__pin {
@@ -175,7 +175,7 @@
   border: 0;
   color: var(--text-primary);
   background: transparent;
-  font-size: 14px;
+  font-size: 0.875rem;
   text-align: left;
   cursor: pointer;
 }
@@ -183,7 +183,7 @@
 .settings__path {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -228,7 +228,7 @@
   border-radius: 4px;
   color: var(--text-primary);
   background: var(--surface-input);
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
 }
 
@@ -240,20 +240,20 @@
 .settings__empty {
   padding: 10px 2px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .settings__error {
   margin: 0;
   color: var(--text-danger);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .settings code {
   padding: 1px 5px;
   border-radius: 3px;
   background: var(--surface-hover);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .settings__segment:focus-visible,

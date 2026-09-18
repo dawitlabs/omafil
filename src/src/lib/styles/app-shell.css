@@ -24,7 +24,7 @@
   border: 2px dashed var(--accent);
   color: var(--text-accent);
   background: var(--accent-soft);
-  font-size: 15px;
+  font-size: 0.9375rem;
   font-weight: 600;
   pointer-events: none;
 }

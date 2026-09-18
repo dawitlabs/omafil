@@ -11,3 +11,7 @@
 @import "../components/BulkRename/bulk-rename.css";
 @import "../components/Settings/settings.css";
 @import "../components/Sidebar/sidebar.css";
+
+@import "../components/ShareDialog/share-dialog.css";
+
+@import "../components/Network/service-view.css";

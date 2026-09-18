@@ -16,6 +16,8 @@ export type Theme = 'system' | 'light' | 'dark'
 export type SortKey = 'name' | 'modified' | 'type' | 'size'
 
 export type Settings = {
+  serverUris: string[]
+  fontScale: number
   showHidden: boolean
   theme: Theme
   defaultSort: SortKey
@@ -25,6 +27,8 @@ export type Settings = {
 }
 
 const defaultSettings: Settings = {
+  serverUris: [],
+  fontScale: 100,
   showHidden: false,
   theme: 'system',
   defaultSort: 'name',
@@ -93,6 +97,9 @@ class AppState {
   applyTheme() {
     const root = document.documentElement
     const colors = this.settings.theme === 'system' ? this.omarchyColors : null
+
+    const scale = [90, 100, 115, 125].includes(this.settings.fontScale) ? this.settings.fontScale : 100
+    root.style.fontSize = `${18 * scale / 100}px`
 
     root.dataset.theme = colors ? 'omarchy' : this.resolvedTheme
     root.dataset.mode = this.resolvedTheme

@@ -1,7 +1,5 @@
-use crate::drives::is_user_visible_drive_mount;
 use crate::error::DirectoryError;
 use std::path::{Path, PathBuf};
-use sysinfo::Disks;
 
 pub(crate) fn is_supported_location(location: &str) -> bool {
     matches!(
@@ -24,58 +22,20 @@ pub(crate) fn known_directory_path(location: &str) -> Result<PathBuf, DirectoryE
     }
 
     let home_directory = current_user_home_directory()?;
-    let directory = match location {
-        "home" => home_directory,
-        "desktop" => home_directory.join("Desktop"),
-        "documents" => home_directory.join("Documents"),
-        "downloads" => home_directory.join("Downloads"),
-        "pictures" => home_directory.join("Pictures"),
-        "videos" => home_directory.join("Videos"),
-        "music" => home_directory.join("Music"),
-        _ => return Err(DirectoryError::unavailable()),
-    };
-
-    directory
-        .is_dir()
-        .then_some(directory)
-        .ok_or_else(DirectoryError::unavailable)
+    if location == "home" {
+        return home_directory.canonicalize().map_err(DirectoryError::from);
+    }
+    crate::user_dirs::resolve(location, &home_directory)
 }
 
 pub(crate) fn navigable_roots() -> Vec<PathBuf> {
-    let mut roots = Vec::new();
-
-    if let Some(home_directory) = current_user_home_directory()
-        .ok()
-        .and_then(|path| path.canonicalize().ok())
-    {
-        roots.push(home_directory);
-    }
-
-    for mount_point in Disks::new_with_refreshed_list()
-        .list()
-        .iter()
-        .map(|disk| disk.mount_point())
-    {
-        if mount_point != Path::new("/") && is_user_visible_drive_mount(mount_point) {
-            if let Ok(root) = mount_point.canonicalize() {
-                roots.push(root);
-            }
-        }
-    }
-
-    roots
+    vec![PathBuf::from("/")]
 }
 
+/// Normal OS permissions govern access, including outside home and mounted drives.
+/// Entry mutations use `resolve_entry_path` to preserve the final symlink.
 pub(crate) fn resolve_navigable_path(path: &str) -> Result<PathBuf, DirectoryError> {
-    let requested = Path::new(path)
-        .canonicalize()
-        .map_err(|_| DirectoryError::unavailable())?;
-
-    navigable_roots()
-        .iter()
-        .any(|root| requested.starts_with(root))
-        .then_some(requested)
-        .ok_or_else(DirectoryError::not_allowed)
+    Path::new(path).canonicalize().map_err(DirectoryError::from)
 }
 
 /// Resolve the parent, preserving the final entry (including dangling symlinks).
@@ -87,7 +47,7 @@ pub(crate) fn resolve_entry_path(path: &str) -> Result<PathBuf, DirectoryError> 
     let entry = parent.join(name);
     entry
         .symlink_metadata()
-        .map_err(|_| DirectoryError::unavailable())?;
+        .map_err(DirectoryError::from)?;
     Ok(entry)
 }
 
@@ -145,8 +105,22 @@ mod tests {
     }
 
     #[test]
-    fn navigation_is_refused_outside_your_files_and_drives() {
-        assert!(resolve_navigable_path("/etc").is_err());
+    fn navigation_uses_normal_filesystem_permissions() {
+        assert!(resolve_navigable_path("/etc").is_ok());
+        let directory = tempfile::tempdir().unwrap();
+        assert!(resolve_navigable_path(directory.path().to_str().unwrap()).is_ok());
         assert!(resolve_navigable_path("/no/such/path").is_err());
+    }
+
+    #[test]
+    fn entry_operations_refuse_root_but_preserve_final_symlinks() {
+        use super::resolve_entry_path;
+        assert!(resolve_entry_path("/").is_err());
+        assert!(resolve_entry_path("/tmp/..").is_err());
+        let root = tempfile::tempdir().unwrap();
+        let link = root.path().join("root-link");
+        std::os::unix::fs::symlink("/", &link).unwrap();
+        assert_eq!(resolve_entry_path(link.to_str().unwrap()).unwrap(), link);
+        assert_eq!(resolve_navigable_path(link.to_str().unwrap()).unwrap(), std::path::PathBuf::from("/"));
     }
 }

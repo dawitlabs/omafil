@@ -57,10 +57,13 @@ export type KnownLocation = (typeof knownLocations)[number]
 export type SearchResults = {
   entries: DirectoryEntry[]
   truncated: boolean
+  skipped?: number
 }
 
 export type View =
   | { kind: 'home' }
+  | { kind: 'network' }
+  | { kind: 'indexed-search' }
   | { kind: 'settings' }
   | { kind: 'recycle' }
   | { kind: 'folder'; path: string }
@@ -85,6 +88,8 @@ export class Navigation {
   isLoading = $state(false)
   isLoadingMore = $state(false)
   error = $state<string | null>(null)
+  revealedPaths = $state<string[]>([])
+  pendingReveal = $state<string[] | null>(null)
   #filter = $state('')
   #filterTimer: ReturnType<typeof setTimeout> | null = null
   #sort = $state<EntrySort | null>(null)
@@ -115,13 +120,13 @@ export class Navigation {
   }
 
   get entries(): DirectoryEntry[] {
-    if (this.view.kind === 'folder') return this.listing?.entries ?? []
+    if (this.view.kind === 'folder') return this.directoryPath ? (this.listing?.entries ?? []) : []
 
     return this.results?.entries ?? []
   }
 
   get total(): number {
-    if (this.view.kind === 'folder') return this.listing?.total ?? 0
+    if (this.view.kind === 'folder') return this.directoryPath ? (this.listing?.total ?? 0) : 0
 
     return this.results?.entries.length ?? 0
   }
@@ -137,11 +142,12 @@ export class Navigation {
   }
 
   get hasMoreEntries(): boolean {
-    return this.view.kind === 'folder' && (this.listing?.hasMore ?? false)
+    return Boolean(this.directoryPath) && (this.listing?.hasMore ?? false)
   }
 
   get directoryPath(): string {
-    return this.view.kind === 'folder' ? (this.listing?.path ?? '') : ''
+    const view = this.view
+    return view.kind === 'folder' && this.listing?.path === view.path ? this.listing.path : ''
   }
 
   get crumbs(): PathCrumb[] {
@@ -153,6 +159,8 @@ export class Navigation {
   get label(): string {
     const view = this.view
 
+    if (view.kind === 'network') return 'Network & Devices'
+    if (view.kind === 'indexed-search') return 'Content search'
     if (view.kind === 'home') return 'Home'
     if (view.kind === 'settings') return 'Settings'
     if (view.kind === 'recycle') return 'Recycle Bin'
@@ -173,6 +181,10 @@ export class Navigation {
     this.#push({ kind: 'home' })
   }
 
+  openNetwork() { this.#push({ kind: 'network' }) }
+
+  openIndexedSearch() { this.#push({ kind: 'indexed-search' }) }
+
   openSettings() {
     this.#push({ kind: 'settings' })
   }
@@ -189,6 +201,16 @@ export class Navigation {
     this.#push({ kind: 'folder', path })
   }
 
+  reveal(path: string, selection: string[]) {
+    this.#push({ kind: 'folder', path }, selection)
+  }
+
+  clearReveal() {
+    this.revealedPaths = []
+    this.pendingReveal = null
+    this.reload()
+  }
+
   get searchScope(): string {
     const view = this.view
 
@@ -197,9 +219,9 @@ export class Navigation {
     return this.directoryPath ? basename(this.directoryPath) : 'your files'
   }
 
-  async search(query: string) {
+  async search(query: string, scope?: string) {
     const view = this.view
-    const scoped = view.kind === 'search' ? view.path : this.directoryPath
+    const scoped = scope ?? (view.kind === 'search' ? view.path : this.directoryPath)
 
     // Home and the tag, settings and placeholder views have no folder of their
     // own, so a search from there covers everything the user can reach.
@@ -258,6 +280,8 @@ export class Navigation {
     if (!this.canGoBack) return
 
     this.#dropFilter()
+    this.revealedPaths = []
+    this.pendingReveal = null
     this.#index -= 1
     void this.#load()
   }
@@ -266,6 +290,8 @@ export class Navigation {
     if (!this.canGoForward) return
 
     this.#dropFilter()
+    this.revealedPaths = []
+    this.pendingReveal = null
     this.#index += 1
     void this.#load()
   }
@@ -328,12 +354,21 @@ export class Navigation {
     void this.#load()
   }
 
-  #push(view: View) {
-    if (view.kind === 'folder' && this.isCurrentPath(view.path)) return
+  #push(view: View, reveal?: string[]) {
+    const sameFolder = view.kind === 'folder' && this.isCurrentPath(view.path)
+    if (sameFolder && reveal === undefined && this.revealedPaths.length === 0) return
+
+    this.revealedPaths = reveal ?? []
+    this.pendingReveal = reveal?.length ? [...reveal] : null
 
     this.#dropFilter()
 
     const current = this.view
+
+    if (sameFolder) {
+      void this.#load()
+      return
+    }
 
     if (view.kind === 'search' && current.kind === 'search' && current.path === view.path) {
       this.#history = [...this.#history.slice(0, this.#index), view]
@@ -349,10 +384,11 @@ export class Navigation {
   async #load() {
     const view = this.view
     const requestId = ++this.#requestSequence
+    this.isLoadingMore = false
     this.error = null
     this.missingTagged = 0
 
-    if (view.kind === 'home' || view.kind === 'placeholder' || view.kind === 'settings' || view.kind === 'recycle') {
+    if (view.kind === 'network' || view.kind === 'indexed-search' || view.kind === 'home' || view.kind === 'placeholder' || view.kind === 'settings' || view.kind === 'recycle') {
       this.listing = null
       this.results = null
       this.isLoading = false
@@ -371,9 +407,11 @@ export class Navigation {
           offset: 0,
           limit: DIRECTORY_PAGE_SIZE,
           filter: this.#filter,
+          revealPaths: this.revealedPaths,
         })
 
         if (requestId === this.#requestSequence) {
+          this.#history[this.#index] = { kind: 'folder', path: listing.path }
           this.listing = listing
           this.results = null
         }
@@ -434,6 +472,7 @@ export class Navigation {
         offset: current.entries.length,
         limit: DIRECTORY_PAGE_SIZE,
         filter: this.#filter,
+        revealPaths: this.revealedPaths,
       })
 
       if (requestId === this.#requestSequence && this.listing?.path === current.path) {

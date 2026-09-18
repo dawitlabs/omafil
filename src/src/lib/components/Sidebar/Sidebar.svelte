@@ -142,6 +142,23 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
       <span class="masked-icon file-sidebar__icon" style="--icon: url({HomeFilledIcon})" aria-hidden="true"></span>
       <span>Home</span>
     </button>
+    <button
+      class="file-sidebar__item"
+      class:file-sidebar__item--active={active.isCurrentPath('/')}
+      type="button"
+      title="Filesystem"
+      aria-current={active.isCurrentPath('/') ? 'page' : undefined}
+      onclick={() => active.open('/')}
+    >
+      <span class="masked-icon file-sidebar__icon" style="--icon: url({HardDriveIcon})" aria-hidden="true"></span>
+      <span>Filesystem</span>
+    </button>
+    <button class="file-sidebar__item" type="button" title="Network & Devices" aria-current={active.view.kind === 'network' ? 'page' : undefined} onclick={() => active.openNetwork()}>
+      <span class="masked-icon file-sidebar__icon" style="--icon: url({HardDriveIcon})" aria-hidden="true"></span><span>Network &amp; Devices</span>
+    </button>
+    <button class="file-sidebar__item" type="button" title="Content search" aria-current={active.view.kind === 'indexed-search' ? 'page' : undefined} onclick={() => active.openIndexedSearch()}>
+      <span class="masked-icon file-sidebar__icon" style="--icon: url({DocumentIcon})" aria-hidden="true"></span><span>Content search</span>
+    </button>
   </nav>
 
   <section class="file-sidebar__section" aria-labelledby="sidebar-pinned-heading">
@@ -182,7 +199,7 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
       <span>Your Files</span>
     </h2>
     <nav class="file-sidebar__nav" aria-label="Your files">
-      {#each fileItems as item (item.location)}
+      {#each fileItems.filter((item) => locationPaths[item.location] !== undefined) as item (item.location)}
         <button
           class="file-sidebar__item"
           class:file-sidebar__item--active={isLocationActive(item.location)}
@@ -236,7 +253,7 @@ import ChevronRightIcon from '@fluentui/svg-icons/icons/chevron_right_20_regular
               title={drive.isMounted ? undefined : 'Not mounted. Click to mount.'}
               onclick={() => openDrive(drive)}
               oncontextmenu={(event) => openMenu(event, drive.isMounted
-                ? [...driveStore.menuItems(drive, (path) => active.open(path)), { kind: 'separator' }, { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.open(); tabs.active.open(drive.path) } }, { kind: 'action', label: appState.isPinned(drive.path) ? 'Unpin from sidebar' : 'Pin to sidebar', onSelect: () => appState.togglePin(drive.path) }, { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(drive.path) }]
+                ? [...driveStore.menuItems(drive, (path) => active.open(path)), { kind: 'separator' }, { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.openPath(drive.path) } }, { kind: 'action', label: appState.isPinned(drive.path) ? 'Unpin from sidebar' : 'Pin to sidebar', onSelect: () => appState.togglePin(drive.path) }, { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(drive.path) }]
                 : driveStore.menuItems(drive, (path) => active.open(path)))}
             >
               <span class="masked-icon file-sidebar__icon" style="--icon: url({drive.isRemovable ? UsbStickIcon : HardDriveIcon})" aria-hidden="true"></span>

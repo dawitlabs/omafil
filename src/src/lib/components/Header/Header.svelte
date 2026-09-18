@@ -110,7 +110,15 @@
     <div class="app-header__tabs" role="tablist" aria-label="Open tabs">
       {#each tabs.all as tab, index (tab)}
         <div class="app-header__tab" class:app-header__tab--active={index === tabs.activeIndex}>
-          <button class="app-header__tab-select" type="button" role="tab" aria-selected={index === tabs.activeIndex} onclick={() => tabs.select(index)}>
+          <button class="app-header__tab-select" type="button" role="tab" aria-selected={index === tabs.activeIndex} tabindex={index === tabs.activeIndex ? 0 : -1} onkeydown={(event) => {
+            const next = event.key === 'ArrowRight' ? (index + 1) % tabs.all.length : event.key === 'ArrowLeft' ? (index + tabs.all.length - 1) % tabs.all.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.all.length - 1 : null
+            if (next === null || event.ctrlKey || event.metaKey || event.altKey) return
+            event.preventDefault()
+            event.stopPropagation()
+            tabs.select(next)
+            const buttons = event.currentTarget.closest('[role=tablist]')?.querySelectorAll<HTMLButtonElement>('[role=tab]')
+            buttons?.[next]?.focus()
+          }} onclick={() => tabs.select(index)}>
             <span class="masked-icon app-header__tab-icon" style="--icon: url({tab.view.kind === 'home' ? HomeIcon : FolderIcon})" aria-hidden="true"></span>
             <span>{tab.label}</span>
           </button>

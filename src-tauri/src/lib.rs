@@ -1,7 +1,12 @@
+mod linux_services;
+pub mod airdrop;
 mod archive;
 mod display;
 mod drives;
 mod diagnostics;
+mod desktop_requests;
+mod desktop_integration;
+mod file_manager_service;
 mod error;
 mod icon_theme;
 mod inspect;
@@ -13,19 +18,21 @@ mod operations;
 mod operation_queue;
 mod operation_io;
 mod paths;
+mod user_dirs;
 mod preview;
 mod clipboard;
 mod recent;
 mod recycle;
 mod search;
 mod store;
+mod thumbnail;
 mod watcher;
 
 use crate::drives::{read_drives, DriveInfo, DriveWatcher};
 use crate::archive::{create_zip as write_zip, extract_zip as unpack_zip};
 use crate::error::{DirectoryError, DriveError, RecentFilesError};
 use crate::listing::{
-    describe_path as read_path_description, read_directory_listing, DirectoryEntry,
+    describe_path as read_path_description, DirectoryEntry,
     DirectoryListing, EntrySort, PathCrumb,
 };
 use crate::inspect::{inspect_path as read_path_inspection, set_permissions as write_permissions, PathInspection};
@@ -38,6 +45,45 @@ use crate::search::{search_directory, SearchGeneration, SearchResults};
 use crate::store::{read_state, write_state, AppState, StoreError};
 use crate::watcher::DirectoryWatcher;
 use tauri::{Emitter, Manager, State};
+
+#[derive(Default)]
+struct DesktopService(std::sync::Mutex<Option<zbus::blocking::Connection>>);
+
+fn start_desktop_service(app: &tauri::AppHandle, force: bool) -> Result<(), String> {
+    let state = app.state::<DesktopService>();
+    let mut connection = state.0.lock().map_err(|_| "Desktop service is unavailable.")?;
+    if connection.is_some() || (!force && !file_manager_service::is_default()) { return Ok(()); }
+    let handle = app.clone();
+    *connection = Some(file_manager_service::serve(std::sync::Arc::new(move |request| dispatch_open(&handle, request))).map_err(|e| e.to_string())?);
+    Ok(())
+}
+
+#[tauri::command]
+async fn desktop_integration_status(app: tauri::AppHandle) -> Result<desktop_integration::IntegrationStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut status = desktop_integration::status()?;
+        status.service_active = app.state::<DesktopService>().0.lock().map_err(|_| "Desktop service is unavailable.")?.is_some();
+        Ok(status)
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn configure_desktop_integration(enabled: bool, app: tauri::AppHandle) -> Result<desktop_integration::IntegrationStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        if enabled {
+            desktop_integration::enable()?;
+            // Another file manager can still own the name. Keep the registration
+            // for next launch and report that state, rather than killing its owner.
+            let _ = start_desktop_service(&app, true);
+        } else {
+            desktop_integration::restore()?;
+            app.state::<DesktopService>().0.lock().map_err(|_| "Desktop service is unavailable.")?.take();
+        }
+        let mut status = desktop_integration::status()?;
+        status.service_active = app.state::<DesktopService>().0.lock().map_err(|_| "Desktop service is unavailable.")?.is_some();
+        Ok(status)
+    }).await.map_err(|e| e.to_string())?
+}
 
 #[tauri::command]
 async fn resolve_location(location: String) -> Result<String, DirectoryError> {
@@ -64,9 +110,10 @@ async fn list_directory(
     offset: usize,
     limit: usize,
     filter: String,
+    reveal_paths: Option<Vec<String>>,
 ) -> Result<DirectoryListing, DirectoryError> {
     tauri::async_runtime::spawn_blocking(move || {
-        read_directory_listing(path, sort, descending, show_hidden, offset, limit, &filter)
+        listing::read_directory_listing_revealing(path, sort, descending, show_hidden, offset, limit, &filter, &reveal_paths.unwrap_or_default())
     })
         .await
         .map_err(|_| DirectoryError::read_failed())?
@@ -152,6 +199,22 @@ async fn pdf_preview(path: String) -> Result<String, DirectoryError> {
 }
 
 #[tauri::command]
+async fn thumbnail(path: String) -> Result<String, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || thumbnail::thumbnail(path))
+        .await
+        .map_err(|_| DirectoryError::read_failed())?
+}
+
+#[tauri::command]
+async fn preview_asset(path: String, app: tauri::AppHandle) -> Result<String, DirectoryError> {
+    let target = tauri::async_runtime::spawn_blocking(move || preview::media_asset(&path))
+        .await.map_err(|_| DirectoryError::read_failed())??;
+    app.asset_protocol_scope().allow_file(&target)
+        .map_err(|_| DirectoryError::detail("Unable to grant access to this preview."))?;
+    Ok(target.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
 fn report_client_error(message: String, detail: Option<String>) {
     if let Some(path) = diagnostics::log_path() {
         diagnostics::append(&path, "client_error", &message, detail.as_deref());
@@ -173,8 +236,15 @@ async fn rename_path(path: String, name: String) -> Result<String, DirectoryErro
 }
 
 #[tauri::command]
-async fn read_file_clipboard() -> Option<(Vec<String>, bool)> {
-    tauri::async_runtime::spawn_blocking(clipboard::read_file_clipboard).await.ok().flatten()
+async fn read_file_clipboard() -> Result<Option<(Vec<String>, bool)>, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(clipboard::read_file_clipboard)
+        .await.map_err(|_| DirectoryError::detail("The clipboard could not be read."))?
+}
+
+#[tauri::command]
+async fn paste_clipboard_image(destination_path: String) -> Result<Option<String>, DirectoryError> {
+    tauri::async_runtime::spawn_blocking(move || clipboard::paste_clipboard_image(&destination_path))
+        .await.map_err(|_| DirectoryError::detail("The image could not be pasted."))?
 }
 
 #[tauri::command]
@@ -326,20 +396,25 @@ fn unwatch_directory(watcher: State<'_, DirectoryWatcher>) {
     watcher.stop();
 }
 
-/// `omafil <path>` (and `xdg-open` handing over a folder) opens straight there.
 #[tauri::command]
 fn theme_icons() -> Option<std::collections::HashMap<String, String>> {
     icon_theme::theme_icons()
 }
 
 #[tauri::command]
-fn startup_path() -> Option<String> {
-    let argument = std::env::args().nth(1)?;
-    let argument = argument.strip_prefix("file://").unwrap_or(&argument);
-    let target = resolve_navigable_path(argument).ok()?;
-    let folder = if target.is_dir() { target } else { target.parent()?.to_path_buf() };
+fn take_open_requests(requests: State<'_, desktop_requests::OpenRequests>) -> Vec<desktop_requests::OpenRequest> {
+    requests.drain()
+}
 
-    Some(folder.to_string_lossy().into_owned())
+fn dispatch_open(app: &tauri::AppHandle, request: desktop_requests::OpenRequest) -> Result<(), String> {
+    app.state::<desktop_requests::OpenRequests>().push(request)?;
+    let _ = app.emit("open-requested", ());
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.unminimize();
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -389,12 +464,68 @@ fn display_scale() -> Option<f64> {
 }
 
 pub fn run() {
+    use desktop_requests::{CliAction, OpenRequest, OpenRequests, parse_cli};
+    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/"));
+    let action = parse_cli(&std::env::args().skip(1).collect::<Vec<_>>(), &cwd);
+    let mut service_activation = false;
+    let initial = match action {
+        Ok(CliAction::Help) => {
+            println!("Omafil — file manager for Omarchy\n\nUsage: omafil [OPTIONS] [PATH_OR_FILE_URI...]\n\n  --select       Open parent folders and select the supplied items\n  --properties   Show properties for one item\n  --make-default Configure reversible folder and Show in folder integration\n  --restore-default Restore the previous desktop setup\n  --             Treat remaining arguments as literal paths\n  -h, --help     Show this help\n  -V, --version  Show version\n\nSubsequent launches open tabs in the existing window. Remote URIs are not supported yet.");
+            return;
+        }
+        Ok(CliAction::Version) => { println!("omafil {}", env!("CARGO_PKG_VERSION")); return; }
+        Ok(CliAction::DesktopService) => { service_activation = true; OpenRequest::default() }
+        Ok(CliAction::MakeDefault) => {
+            match desktop_integration::enable() {
+                Ok(()) => println!("Omafil is configured as the default file manager. Close the previous file manager and restart Omafil to activate Show in folder."),
+                Err(error) => { eprintln!("{error}"); std::process::exit(1); }
+            }
+            return;
+        }
+        Ok(CliAction::RestoreDefault) => {
+            match desktop_integration::restore() {
+                Ok(()) => println!("Previous desktop setup restored. Restart Omafil to release its running desktop service."),
+                Err(error) => { eprintln!("{error}"); std::process::exit(1); }
+            }
+            return;
+        }
+        Ok(CliAction::Open(request)) => request,
+        Err(error) => OpenRequest { targets: vec![], error: Some(error) },
+    };
+    let requests = OpenRequests::default();
+    let _ = requests.push(initial);
     display::prefer_xwayland();
 
     diagnostics::install_panic_hook();
     tauri::Builder::default()
+        .manage(requests)
+        .manage(linux_services::ServiceRequests::default())
+        .manage(DesktopService::default())
+        .plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            let request = match parse_cli(&args.into_iter().skip(1).collect::<Vec<_>>(), std::path::Path::new(&cwd)) {
+                Ok(CliAction::Open(request)) => request,
+                Ok(CliAction::DesktopService) => {
+                    let app = app.clone();
+                    std::thread::spawn(move || { let _ = start_desktop_service(&app, true); });
+                    return;
+                }
+                Ok(_) => return,
+                Err(error) => OpenRequest { targets: vec![], error: Some(error) },
+            };
+            if let Err(error) = dispatch_open(app, request) {
+                let _ = app.emit("open-request-error", error);
+            }
+        }))
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
+        .setup(move |app| {
+            let desktop_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                if let Err(error) = start_desktop_service(&desktop_handle, service_activation) {
+                        if let Some(path) = diagnostics::log_path() {
+                            diagnostics::append(&path, "desktop_service", "FileManager1 is unavailable", Some(&error.to_string()));
+                        }
+                }
+            });
             app.manage(DirectoryWatcher::default());
             app.manage(SearchGeneration::default());
             app.manage(OperationQueue::default());
@@ -419,6 +550,16 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            linux_services::linux_service,
+            linux_services::cancel_linux_service,
+            desktop_integration_status,
+            configure_desktop_integration,
+            airdrop::commands::airdrop_availability,
+            airdrop::commands::discover_airdrop_devices,
+            airdrop::commands::send_airdrop_file,
+            airdrop::commands::accept_airdrop_transfer,
+            airdrop::commands::reject_airdrop_transfer,
+            airdrop::commands::cancel_airdrop_transfer,
             resolve_location,
             list_directory,
             list_subdirectories,
@@ -429,6 +570,8 @@ pub fn run() {
             open_with,
             set_default_opener,
             pdf_preview,
+            thumbnail,
+            preview_asset,
             report_client_error,
             mount_drive,
             unmount_drive,
@@ -437,6 +580,7 @@ pub fn run() {
             new_directory,
             rename_path,
             read_file_clipboard,
+            paste_clipboard_image,
             write_file_clipboard,
             trash_paths,
             transfer_paths,
@@ -459,7 +603,7 @@ pub fn run() {
             watch_directories,
             unwatch_directory,
             read_omarchy_theme,
-            startup_path,
+            take_open_requests,
             theme_icons,
             load_state,
             save_state,

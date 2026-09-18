@@ -1,0 +1,22 @@
+.service-view { max-width: 1050px; margin: 0 auto; color: var(--text-primary); }
+.service-view h1 { margin: 0 0 20px; font-size: 1.25rem; }
+.service-view h2 { margin: 0; font-size: 1rem; }
+.service-view__connect { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.service-view__connect label { font-size: .875rem; }
+.service-view__connect input { flex: 1 1 280px; min-width: 0; }
+.service-view input:not([type='checkbox']), .service-view select { padding: 9px 10px; border: 1px solid var(--border-strong); border-radius: 5px; color: var(--text-primary); background: var(--surface-input); font: inherit; }
+.service-view button { padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 5px; color: var(--text-primary); background: var(--surface-content); font: inherit; cursor: pointer; }
+.service-view button:hover:not(:disabled) { background: var(--surface-hover); }
+.service-view button:disabled { color: var(--text-disabled); cursor: default; }
+.service-view :is(button, input, select, h1):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.service-view__hint { font-size: .8125rem; color: var(--text-secondary); line-height: 1.6; }
+.service-view__toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 22px 0 12px; }
+.service-view__mounts { padding: 0; list-style: none; display: flex; gap: 10px; flex-wrap: wrap; font-size: .875rem; }
+.service-view__status { min-height: 1.5em; font-size: .875rem; }
+.service-view__error { padding: 12px; border: 1px solid var(--border-danger); color: var(--text-danger); border-radius: 5px; }
+.service-view__address { overflow-wrap: anywhere; font-size: .875rem; }
+.service-view__table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+.service-view__table :is(th, td) { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--border-subtle); overflow-wrap: anywhere; }
+.service-view__table input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--accent); }
+.service-view__table td:last-child { white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .service-view * { scroll-behavior: auto; transition: none; } }

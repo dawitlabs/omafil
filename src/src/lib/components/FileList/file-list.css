@@ -16,7 +16,7 @@
   border-radius: 4px;
   color: var(--text-primary);
   background: transparent;
-  font-size: 13px;
+  font-size: 0.8125rem;
   white-space: nowrap;
   flex-shrink: 0;
   cursor: pointer;
@@ -50,7 +50,7 @@
   border-radius: 4px;
   color: var(--text-notice);
   background: var(--surface-notice);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .file-list__columns {
@@ -71,7 +71,7 @@
   border-radius: 4px;
   color: var(--text-muted);
   background: transparent;
-  font-size: 12px;
+  font-size: 0.75rem;
   text-align: left;
   cursor: pointer;
 }
@@ -122,7 +122,7 @@
   padding: 0 8px;
   border-radius: 4px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: default;
 }
 /* Those five columns have a 490px floor, which with the sidebar pushed the whole
@@ -223,13 +223,13 @@
   outline: 0;
   color: var(--text-primary);
   background: var(--surface-input);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .file-list__empty {
   margin: 4px 8px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 0.8125rem;
   pointer-events: none;
 }
 
@@ -252,7 +252,7 @@
   border-radius: 4px;
   color: var(--text-danger);
   background: var(--surface-danger);
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 
 .file-list__error p {
@@ -345,8 +345,8 @@
   box-shadow: var(--shadow-menu);
 }
 
-.file-conflict h2 { margin: 0 0 8px; color: var(--text-primary); font-size: 16px; }
-.file-conflict p, .file-conflict ul { margin: 0 0 12px; font-size: 13px; }
+.file-conflict h2 { margin: 0 0 8px; color: var(--text-primary); font-size: 1rem; }
+.file-conflict p, .file-conflict ul { margin: 0 0 12px; font-size: 0.8125rem; }
 .file-conflict ul { max-height: 90px; padding-left: 20px; overflow: auto; }
 .file-conflict__actions { display: flex; justify-content: flex-end; gap: 8px; }
 .file-conflict__actions button { height: 32px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 4px; color: var(--text-primary); background: var(--surface-input); cursor: pointer; }
@@ -354,7 +354,7 @@
 .file-conflict__actions .file-conflict__replace { border-color: var(--accent); color: var(--text-on-accent); background: var(--accent); }
 .file-conflict__actions .file-conflict__replace:hover { filter: brightness(0.94); }
 .file-archive-dialog { width: min(480px, 100%); }
-.file-archive-dialog__field { display: grid; gap: 7px; margin: 18px 0; color: var(--text-primary); font-size: 13px; font-weight: 600; }
+.file-archive-dialog__field { display: grid; gap: 7px; margin: 18px 0; color: var(--text-primary); font-size: 0.8125rem; font-weight: 600; }
 .file-archive-dialog__field input { height: 34px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 4px; outline: 0; color: var(--text-primary); background: var(--surface-input); font: inherit; font-weight: 400; }
 .file-archive-dialog__field input:focus { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
@@ -367,7 +367,7 @@
   border: 1px solid var(--border-notice);
   border-radius: 4px;
   background: var(--surface-notice);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .file-list__filter-query {
@@ -384,4 +384,13 @@
 .file-list__filter-hint {
   flex: none;
   color: var(--text-muted);
+}
+.file-list__reveal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block: 8px;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
 }

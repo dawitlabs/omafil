@@ -2,7 +2,7 @@ use crate::error::DirectoryError;
 use crate::launch::spawn_first;
 use crate::paths::resolve_navigable_path;
 use serde::Serialize;
-use std::{collections::HashSet, fs, path::PathBuf, process::Command};
+use std::{collections::HashSet, fs, path::{Path, PathBuf}, process::Command};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -18,7 +18,8 @@ struct DesktopEntry {
     mime_types: Vec<String>,
 }
 
-fn application_dirs() -> Vec<PathBuf> {
+/// Every XDG data directory's `sub` folder, most specific first.
+pub(crate) fn data_dirs(sub: &str) -> Vec<PathBuf> {
     let home = std::env::var_os("HOME").map(PathBuf::from);
     let data_home = std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
@@ -28,7 +29,7 @@ fn application_dirs() -> Vec<PathBuf> {
     data_home
         .into_iter()
         .chain(data_dirs.split(':').filter(|dir| !dir.is_empty()).map(PathBuf::from))
-        .map(|dir| dir.join("applications"))
+        .map(|dir| dir.join(sub))
         .collect()
 }
 
@@ -98,8 +99,12 @@ fn xdg_mime(args: &[&str]) -> Option<String> {
     (output.status.success() && !value.is_empty()).then_some(value)
 }
 
+pub(crate) fn file_mime(target: &Path) -> Option<String> {
+    xdg_mime(&["query", "filetype", &target.to_string_lossy()])
+}
+
 fn find_entry(id: &str) -> Option<DesktopEntry> {
-    application_dirs()
+    data_dirs("applications")
         .into_iter()
         .find_map(|dir| fs::read_to_string(dir.join(id)).ok())
         .and_then(|source| parse_desktop_entry(&source))
@@ -107,13 +112,13 @@ fn find_entry(id: &str) -> Option<DesktopEntry> {
 
 pub(crate) fn list_openers(path: String) -> Result<Vec<Opener>, DirectoryError> {
     let target = resolve_navigable_path(&path)?;
-    let mime = xdg_mime(&["query", "filetype", &target.to_string_lossy()])
+    let mime = file_mime(&target)
         .ok_or_else(|| DirectoryError::detail("Unable to determine this file's type."))?;
     let default_id = xdg_mime(&["query", "default", &mime]);
     let mut seen = HashSet::new();
     let mut openers = Vec::new();
 
-    for dir in application_dirs() {
+    for dir in data_dirs("applications") {
         let Ok(entries) = fs::read_dir(dir) else { continue };
 
         for entry in entries.flatten() {
@@ -139,7 +144,7 @@ pub(crate) fn list_openers(path: String) -> Result<Vec<Opener>, DirectoryError> 
 pub(crate) fn set_default_opener(path: String, desktop_id: String) -> Result<(), DirectoryError> {
     let target = resolve_navigable_path(&path)?;
     find_entry(&desktop_id).ok_or_else(|| DirectoryError::detail("That app is no longer installed."))?;
-    let mime = xdg_mime(&["query", "filetype", &target.to_string_lossy()])
+    let mime = file_mime(&target)
         .ok_or_else(|| DirectoryError::detail("Unable to determine this file's type."))?;
     let applied = Command::new("xdg-mime").args(["default", &desktop_id, &mime]).status();
 

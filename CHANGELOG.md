@@ -1,5 +1,60 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Network & Devices: GIO URI browsing, native server sign-in, device discovery,
+  address-only saved servers, cancellable no-overwrite copies and explicit limits.
+- Optional LocalSearch document-content search with scoped, parameterized queries,
+  hidden-file handling, result filters, Show in folder and filename fallback.
+- Keyboard range selection, selection toggling and roving tab focus/navigation.
+
+- Paste copied PNG, JPEG and WebP images into the current folder, with unique
+  filenames and Undo. Click a selected item's name again to rename it; double
+  clicking continues to open it.
+
+- Reversible default-manager setup in Settings and `--make-default` /
+  `--restore-default`, preserving earlier associations and later unrelated edits.
+- Per-user D-Bus activation so Show in folder can start a closed Omafil window.
+- Single-instance desktop opening with multiple paths or local file URIs,
+  `--select`, `--properties`, `--help` and `--version`.
+- FileManager1 D-Bus integration while Omafil is running as the configured folder
+  handler; existing service ownership is preserved.
+- Requested items are selected and shown first, including hidden and later-page
+  items, with an action to restore normal ordering.
+- Filesystem sidebar entry and navigation outside home and removable drives,
+  governed by normal Linux permissions. Breadcrumbs reach the filesystem root.
+- Standard folders follow XDG user-directory settings, including localized names
+  and locations outside home. Disabled and missing shortcuts are hidden.
+- Supported media previews outside home receive individual file access grants.
+  Special files are excluded from content previews and text reads are bounded.
+
+### Fixed
+
+- Enter in a new-folder or rename field saves the name without also opening a
+  folder. Escape cancels without a subsequent blur saving the draft.
+- Paste reads fresh desktop file lists, including URI-list and KDE cut formats,
+  waits for Copy publication, and clears stale clipboard selections.
+- Increase the application text baseline by 12.5%, retaining saved size choices.
+
+- Local installation leaves default selection explicit; local uninstallation
+  restores a saved desktop registration before removing the executable.
+- Correctly decode escaped file URIs instead of stripping their prefix.
+- Preserve opening requests received before the frontend listener is ready,
+  and show launch errors even on Home.
+- Closing an earlier tab preserves the active folder; opening at the tab limit
+  reports the limit instead of replacing another folder.
+- Clear stale pagination state when navigating during a page request.
+- Hide the previous folder's entries and mutation target while a new folder loads,
+  so keyboard operations cannot accidentally affect the previous location.
+- Type and size search filters no longer prevent traversal of parent directories.
+  Searches report incomplete coverage when files or folders cannot be read.
+- Navigation preserves permission-denied and disconnected-location errors instead
+  of reducing them to a generic unavailable-folder message.
+- Opening a symlinked folder updates the navigation path to the resolved location,
+  keeping breadcrumbs and the Up action usable.
+
 ## 0.2.4 — 2026-09-15
 
 ### Fixed

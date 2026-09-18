@@ -12,6 +12,8 @@
   import FileList from '../FileList/FileList.svelte'
   import ContextMenu from '../ContextMenu/ContextMenu.svelte'
   import type { ContextMenuItem } from '../ContextMenu/ContextMenu.svelte'
+  import Network from '../Network/Network.svelte'
+  import IndexedSearch from '../IndexedSearch/IndexedSearch.svelte'
   import Settings from '../Settings/Settings.svelte'
   import { appState } from '../../appState.svelte'
   import { fileIcon } from '../../fileIcons'
@@ -116,7 +118,11 @@
 
 <div class="home-screen">
   <div class="home-view">
-    {#if tabs.active.view.kind === 'settings'}
+    {#if tabs.active.view.kind === 'network'}
+      <Network />
+    {:else if tabs.active.view.kind === 'indexed-search'}
+      <IndexedSearch />
+    {:else if tabs.active.view.kind === 'settings'}
       <section class="home-view__section" aria-labelledby="settings-heading">
         <h1 id="settings-heading" class="home-view__heading">
           <span class="masked-icon home-view__heading-icon" style="--icon: url({SettingsIcon})" aria-hidden="true"></span><span>Settings</span>
@@ -225,7 +231,7 @@
         {:else}
           <div class="home-view__recent-list">
             {#each recentFiles as file (file.path)}
-              <button class="home-view__recent-row" type="button" onclick={() => tabs.active.openExternally(file.path)} oncontextmenu={(event) => { event.preventDefault(); menu = { x: event.clientX, y: event.clientY, items: [{ kind: 'action', label: 'Open', onSelect: () => tabs.active.openExternally(file.path) }, { kind: 'action', label: 'Open file location', onSelect: () => tabs.active.open(file.parentDirectory) }, { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.open(); tabs.active.open(file.parentDirectory) } }, { kind: 'separator' }, { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: () => fileOperations.cutPaths([file.path]) }, { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => fileOperations.copyPaths([file.path]) }, { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(file.path) }, { kind: 'separator' }, { kind: 'action', label: appState.isPinned(file.parentDirectory) ? 'Unpin parent folder' : 'Pin parent folder', onSelect: () => appState.togglePin(file.parentDirectory) }, { kind: 'action', label: 'Properties', onSelect: () => fileOperations.showProperties(file.path) }] } }}>
+              <button class="home-view__recent-row" type="button" onclick={() => tabs.active.openExternally(file.path)} oncontextmenu={(event) => { event.preventDefault(); menu = { x: event.clientX, y: event.clientY, items: [{ kind: 'action', label: 'Open', onSelect: () => tabs.active.openExternally(file.path) }, { kind: 'action', label: 'Open file location', onSelect: () => tabs.active.open(file.parentDirectory) }, { kind: 'action', label: 'Open in new tab', onSelect: () => { tabs.openPath(file.parentDirectory) } }, { kind: 'separator' }, { kind: 'action', label: 'Cut', shortcut: 'Ctrl+X', onSelect: () => fileOperations.cutPaths([file.path]) }, { kind: 'action', label: 'Copy', shortcut: 'Ctrl+C', onSelect: () => fileOperations.copyPaths([file.path]) }, { kind: 'action', label: 'Copy path', onSelect: () => navigator.clipboard.writeText(file.path) }, { kind: 'separator' }, { kind: 'action', label: appState.isPinned(file.parentDirectory) ? 'Unpin parent folder' : 'Pin parent folder', onSelect: () => appState.togglePin(file.parentDirectory) }, { kind: 'action', label: 'Properties', onSelect: () => fileOperations.showProperties(file.path) }] } }}>
                 <span class="masked-icon home-view__recent-icon" style="--icon: url({fileIcon(file.name).icon}); color: {fileIcon(file.name).tone}" aria-hidden="true"></span>
                 <span>{file.name}</span>
                 <span class="home-view__recent-location">{file.parentDirectory}</span>
@@ -248,6 +254,11 @@
             <button class="home-view__retry" type="button" onclick={() => tabs.active.reload()}>Try again</button>
           </div>
         {:else}
+          {#if tabs.active.view.kind === 'search' && !tabs.active.isLoading}
+            {#if tabs.active.results?.skipped}
+              <p class="home-view__state" role="status">Some files or folders could not be read. These search results may be incomplete.</p>
+            {/if}
+          {/if}
           {#if tabs.active.entries.length > 0 || !tabs.active.isLoading}
             <div class="home-view__listing">
               <div class="home-view__panes" class:home-view__panes--split={tabs.tab.split !== null}>

@@ -29,7 +29,7 @@
   border-radius: 4px;
   color: var(--text-primary);
   background: transparent;
-  font-size: 14px;
+  font-size: 0.875rem;
   text-align: left;
   cursor: pointer;
 }
@@ -50,7 +50,7 @@
 
 .context-menu__shortcut {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 
 .context-menu__item:disabled .context-menu__shortcut {
@@ -67,7 +67,7 @@
 .context-menu__heading {
   margin: 6px 10px 4px;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.4px;
