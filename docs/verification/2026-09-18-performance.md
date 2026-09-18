@@ -192,3 +192,53 @@ against Nautilus's ~97 MB has enormous headroom. A 200 ms lead does not. The
 next slice should be whichever subsystem is most likely to be expensive at
 startup — the D-Bus service and drive enumeration are the candidates — to learn
 whether the curve flattens or keeps climbing.
+
+## GTK4 slice three: D-Bus service and drives
+
+Adds the two subsystems most likely to be expensive at launch:
+`file_manager_service::serve` on a background thread exactly as the Tauri build
+starts it, `drives::read_drives` populating a sidebar — which shells out to
+`lsblk` and stats every mount through `sysinfo` — plus the theme watcher and the
+`/dev/disk/by-path` drive watcher the real app parks in application state. That
+pulls in `zbus`, `sysinfo` and `serde_json`.
+
+| Files | GTK4 slice 3 | omafil (Tauri) | Nautilus |
+| --- | --- | --- | --- |
+| 1,000 | **523 ms · 40 MB** | 1181 ms · 233 MB | 961 ms · 97 MB |
+| 10,000 | **604 ms · 40 MB** | 1130 ms · 233 MB | 864 ms · 100 MB |
+| 50,000 | **725 ms · 39 MB** | 1077 ms · 233 MB | 895 ms · 96 MB |
+
+### The curve flattened
+
+| | Startup | Memory | Binary |
+| --- | --- | --- | --- |
+| Bare list | ~350 ms | 32-71 MB | 328 KB |
+| + real listing and theme | ~500 ms | 37 MB | 444 KB |
+| + navigation, selection, menus, I/O chain | ~660 ms | 38 MB | 528 KB |
+| + D-Bus service, drives, watchers | **~620 ms** | 40 MB | 2.1 MB |
+
+Slice three is **indistinguishable from slice two** despite adding two
+heavyweight subsystems and three crates. Run-to-run noise on this machine is
+roughly +/-150 ms, and the two slices overlap well within it. Binary size grew
+four-fold; startup did not move.
+
+The 350 to 500 to 660 ms climb was therefore **front-loaded on the first real
+work** — parsing the theme and reading the first directory — not a per-feature
+tax. Starting the bus service on a thread keeps it off the launch path
+entirely, and `lsblk` is cheap.
+
+### Where this leaves the port
+
+Both conclusions now hold:
+
+- **Memory:** ~40 MB flat at every directory size against Nautilus's ~97 MB.
+- **Startup:** ~620 ms against Nautilus's ~900 ms, and no longer trending toward
+  it as subsystems land.
+
+Still missing: search, thumbnails, tabs, split panes, the inspector, drag and
+drop and undo. Search and thumbnails are lazy by nature and should not touch
+launch. Tabs and split panes are widget construction, which slice two showed is
+close to free.
+
+Nothing measured so far suggests a ported omafil would fail to beat Nautilus on
+both axes.

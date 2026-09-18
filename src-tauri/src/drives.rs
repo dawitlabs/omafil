@@ -13,15 +13,15 @@ pub(crate) struct DriveWatcher(#[allow(dead_code)] pub(crate) RecommendedWatcher
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DriveInfo {
-    name: String,
-    mount_point: String,
-    path: String,
-    total_bytes: u64,
-    available_bytes: u64,
-    is_removable: bool,
-    is_read_only: bool,
-    is_mounted: bool,
-    device: Option<String>,
+    pub(crate) name: String,
+    pub(crate) mount_point: String,
+    pub(crate) path: String,
+    pub(crate) total_bytes: u64,
+    pub(crate) available_bytes: u64,
+    pub(crate) is_removable: bool,
+    pub(crate) is_read_only: bool,
+    pub(crate) is_mounted: bool,
+    pub(crate) device: Option<String>,
 }
 
 #[derive(Deserialize)]

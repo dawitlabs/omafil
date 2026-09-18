@@ -28,6 +28,10 @@ mod recycle;
 mod operation_io;
 #[path = "../../../src-tauri/src/operations.rs"]
 mod operations;
+#[path = "../../../src-tauri/src/drives.rs"]
+mod drives;
+#[path = "../../../src-tauri/src/file_manager_service.rs"]
+mod file_manager_service;
 
 use gtk4::{gio, glib, prelude::*, subclass::prelude::*};
 use listing::{DirectoryEntry, DirectoryEntryType, EntrySort};
@@ -121,6 +125,7 @@ fn apply_theme() {
 }
 
 struct App {
+    _watchers: RefCell<Vec<Box<dyn std::any::Any>>>,
     folder: RefCell<PathBuf>,
     history: RefCell<Vec<PathBuf>>,
     store: gio::ListStore,
@@ -284,6 +289,7 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
     let up = gtk4::Button::builder().label("Up").build();
 
     let state = Rc::new(App {
+        _watchers: RefCell::new(Vec::new()),
         folder: RefCell::new(folder.clone()),
         history: RefCell::new(Vec::new()),
         store,
@@ -342,6 +348,32 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
     });
     view.add_controller(gesture);
 
+    // Drives in a sidebar: read_drives shells out to lsblk and stats every
+    // mount through sysinfo, so it is the expensive half of this slice.
+    let sidebar = gtk4::Box::new(gtk4::Orientation::Vertical, 2);
+    sidebar.set_margin_top(6);
+    sidebar.set_margin_start(6);
+    sidebar.set_size_request(180, -1);
+    sidebar.append(&gtk4::Label::builder().label("Drives").xalign(0.0).build());
+    for drive in drives::read_drives() {
+        let button = gtk4::Button::builder().label(&drive.name).css_classes(["crumb"]).has_frame(false).build();
+        let destination = PathBuf::from(&drive.mount_point);
+        let navigating = Rc::clone(&state);
+        button.connect_clicked(move |_| navigate(&navigating, destination.clone(), true));
+        sidebar.append(&button);
+    }
+
+    // The same watchers the Tauri build parks in application state.
+    if let Some(theme_watcher) = omarchy::watch_theme(|| {}) {
+        state._watchers.borrow_mut().push(Box::new(theme_watcher));
+    }
+    let by_path = PathBuf::from("/dev/disk/by-path");
+    if by_path.is_dir() {
+        if let Ok(drive_watcher) = watcher::start_watch(by_path, |_| {}) {
+            state._watchers.borrow_mut().push(Box::new(drive_watcher));
+        }
+    }
+
     let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
     header.set_margin_top(6);
     header.set_margin_start(6);
@@ -357,8 +389,13 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
     status.set_margin_bottom(6);
     layout.append(&status);
 
+    let split = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
+    split.append(&sidebar);
+    split.append(&layout);
+    layout.set_hexpand(true);
+
     let window = gtk4::ApplicationWindow::builder()
-        .application(app).title("omafil").default_width(1200).default_height(840).child(&layout).build();
+        .application(app).title("omafil").default_width(1200).default_height(840).child(&split).build();
     install_actions(&state, &window);
     navigate(&state, folder, false);
     window.present();
@@ -369,6 +406,14 @@ use std::path::Path;
 fn main() -> glib::ExitCode {
     let requested = std::env::args().nth(1);
     let application = gtk4::Application::builder().application_id("dev.omafil.SpikeGtk4").build();
+
+    // FileManager1 on its own thread, exactly as the Tauri build starts it. The
+    // name is requested with DoNotQueue, so an existing file manager keeps it.
+    std::thread::spawn(|| {
+        if let Ok(connection) = file_manager_service::serve(std::sync::Arc::new(|_request| Ok(()))) {
+            std::mem::forget(connection);
+        }
+    });
 
     application.connect_activate(move |app| {
         apply_theme();
