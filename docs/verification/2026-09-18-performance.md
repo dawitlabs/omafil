@@ -66,6 +66,9 @@ instance, which would otherwise make every repeat measure forwarding.
 
 ## GTK4 toolkit spike
 
+(The directory was later renamed `gtk` and the crate `omafil-gtk`; paths below
+are as they were when measured.)
+
 `spike/gtk4` is a minimal GTK4 file list in Rust — `DirectoryList` feeding a
 `ListView` through a `SignalListItemFactory`, the idiomatic path a real port
 would take. Same window size and release profile as omafil. It has no

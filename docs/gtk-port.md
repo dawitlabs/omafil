@@ -22,15 +22,15 @@ build reaches parity.
 
 | Screen | Tauri | GTK | Notes |
 | --- | --- | --- | --- |
-| File list | done | **done** | ColumnView with name, size, modified. No icons yet. |
+| File list | done | **done** | ColumnView with icon, name, size, modified. |
 | Navigation | done | **done** | Breadcrumbs, Back, Up, activation. |
 | Selection | done | **done** | Multi-select, rubber band, keyboard range from ColumnView. |
 | Context menu | done | **partial** | Open, Rename, Open Terminal Here. No copy, move, trash, compress, Open With. |
-| Sidebar | done | **partial** | Home, Filesystem, pins, XDG directories, drives, tags. No icons, no folder tree, no drive mount actions, no pin or tag editing. |
+| Sidebar | done | **partial** | Home, Filesystem, pins, XDG directories, drives, tags, icons. No folder tree, no drive mount actions, no pin or tag editing. |
 | Theming | done | **done** | `colors.toml` as GTK CSS, applied at startup. Does not yet retint live. |
 | Drives | done | **partial** | Listed with free space. No mount, unmount, eject or format. |
 | FileManager1 | done | **done** | Served on a background thread, name requested with DoNotQueue. |
-| Icons | done | not started | `core::icon_theme` is unused by this build. The next item. |
+| Icons | done | **done** | Names from `core::file_icons`, resolved by GTK against the Omarchy icon theme. |
 | Thumbnails | done | not started | `core::thumbnail` is unused by this build. |
 | Tabs | done | not started | |
 | Split panes | done | not started | |

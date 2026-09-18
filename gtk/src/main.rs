@@ -5,7 +5,7 @@
 //! surfaces are ported, this build cannot delete anything.
 
 use gtk4::{gio, glib, prelude::*, subclass::prelude::*};
-use omafil_core::{drives, file_manager_service, launch, listing, omarchy, operations, paths, store, watcher};
+use omafil_core::{drives, file_icons, file_manager_service, icon_theme, launch, listing, omarchy, operations, paths, store, watcher};
 use listing::{DirectoryEntry, DirectoryEntryType, EntrySort};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
@@ -16,6 +16,7 @@ mod row {
     #[derive(Default)]
     pub struct Inner {
         pub name: RefCell<String>,
+        pub icon: RefCell<String>,
         pub path: RefCell<String>,
         pub size: RefCell<String>,
         pub modified: RefCell<String>,
@@ -41,6 +42,9 @@ impl Row {
         let inner = object.imp();
         let is_directory = entry.entry_type == DirectoryEntryType::Directory;
         inner.name.replace(entry.name.clone());
+        inner.icon.replace(
+            if is_directory { file_icons::folder_icon_name(&entry.name) } else { file_icons::file_icon_name(&entry.name) }.to_owned(),
+        );
         inner.path.replace(entry.path.clone());
         inner.is_directory.set(is_directory);
         inner.size.replace(if is_directory { String::new() } else { format_bytes(entry.size) });
@@ -78,6 +82,11 @@ fn format_modified(seconds: i64) -> String {
 /// Omarchy's palette as GTK CSS. The webview build does this with custom
 /// properties; GTK takes named colours the same way.
 fn apply_theme() {
+    // The display's icon theme is a singleton and refuses set_theme_name; the
+    // supported route is the settings property, which GTK applies to it.
+    if let (Some(settings), Some(theme)) = (gtk4::Settings::default(), icon_theme::current_theme_name()) {
+        settings.set_gtk_icon_theme_name(Some(&theme));
+    }
     let Some(colors) = omarchy::read_theme() else { return };
     let pick = |key: &str, fallback: &str| colors.get(key).cloned().unwrap_or_else(|| fallback.to_owned());
     let css = format!(
@@ -169,11 +178,11 @@ fn navigate(app: &Rc<App>, target: PathBuf, remember: bool) {
     ));
 }
 
-fn shortcut(state: &Rc<App>, label: &str, target: PathBuf) -> gtk4::Button {
-    let button = gtk4::Button::builder().label(label).css_classes(["shortcut"]).has_frame(false).build();
-    if let Some(child) = button.child().and_downcast::<gtk4::Label>() {
-        child.set_xalign(0.0);
-    }
+fn shortcut(state: &Rc<App>, label: &str, icon: &str, target: PathBuf) -> gtk4::Button {
+    let content = gtk4::Box::builder().orientation(gtk4::Orientation::Horizontal).spacing(8).build();
+    content.append(&gtk4::Image::from_icon_name(icon));
+    content.append(&gtk4::Label::builder().label(label).xalign(0.0).build());
+    let button = gtk4::Button::builder().child(&content).css_classes(["shortcut"]).has_frame(false).build();
     let navigating = Rc::clone(state);
     let destination = target.clone();
     button.connect_clicked(move |_| navigate(&navigating, destination.clone(), true));
@@ -203,22 +212,22 @@ fn build_sidebar(state: &Rc<App>) -> gtk4::Widget {
     column.append(&gtk4::Label::builder().label("omafil").xalign(0.0).css_classes(["brand"]).build());
 
     if let Ok(home) = paths::current_user_home_directory() {
-        column.append(&shortcut(state, "Home", home));
+        column.append(&shortcut(state, "Home", "user-home", home));
     }
-    column.append(&shortcut(state, "Filesystem", PathBuf::from("/")));
+    column.append(&shortcut(state, "Filesystem", "drive-harddisk", PathBuf::from("/")));
 
     let saved = store::read_state();
     if !saved.pins.is_empty() {
         column.append(&heading("Pinned"));
         for pin in &saved.pins {
-            column.append(&shortcut(state, &pin.label, PathBuf::from(&pin.path)));
+            column.append(&shortcut(state, &pin.label, "folder", PathBuf::from(&pin.path)));
         }
     }
 
     column.append(&heading("Your Files"));
     for (location, label) in USER_DIRECTORIES {
         if let Ok(path) = paths::known_directory_path(location) {
-            column.append(&shortcut(state, label, path));
+            column.append(&shortcut(state, label, file_icons::folder_icon_name(location), path));
         }
     }
 
@@ -227,7 +236,8 @@ fn build_sidebar(state: &Rc<App>) -> gtk4::Widget {
         column.append(&heading("Drives"));
         for drive in &found {
             let free = drive.available_bytes;
-            let button = shortcut(state, &drive.name, PathBuf::from(&drive.mount_point));
+            let icon = if drive.is_removable { "media-removable" } else { "drive-harddisk" };
+            let button = shortcut(state, &drive.name, icon, PathBuf::from(&drive.mount_point));
             button.set_tooltip_text(Some(&format!("{} free of {}", format_bytes(free), format_bytes(drive.total_bytes))));
             column.append(&button);
         }
@@ -249,6 +259,28 @@ fn build_sidebar(state: &Rc<App>) -> gtk4::Widget {
 
     gtk4::ScrolledWindow::builder()
         .hscrollbar_policy(gtk4::PolicyType::Never).child(&column).build().upcast()
+}
+
+fn name_column() -> gtk4::ColumnViewColumn {
+    let factory = gtk4::SignalListItemFactory::new();
+    factory.connect_setup(|_, item| {
+        let cell = gtk4::Box::builder().orientation(gtk4::Orientation::Horizontal).spacing(8).css_classes(["cell"]).build();
+        cell.append(&gtk4::Image::new());
+        cell.append(&gtk4::Label::builder().xalign(0.0).ellipsize(gtk4::pango::EllipsizeMode::Middle).build());
+        item.downcast_ref::<gtk4::ListItem>().expect("list item").set_child(Some(&cell));
+    });
+    factory.connect_bind(|_, item| {
+        let item = item.downcast_ref::<gtk4::ListItem>().expect("list item");
+        let Some(entry) = item.item().and_downcast::<Row>() else { return };
+        let Some(cell) = item.child().and_downcast::<gtk4::Box>() else { return };
+        let Some(image) = cell.first_child().and_downcast::<gtk4::Image>() else { return };
+        let Some(label) = image.next_sibling().and_downcast::<gtk4::Label>() else { return };
+        image.set_icon_name(Some(&entry.imp().icon.borrow()));
+        label.set_text(&entry.imp().name.borrow());
+    });
+    let column = gtk4::ColumnViewColumn::new(Some("Name"), Some(factory));
+    column.set_expand(true);
+    column
 }
 
 fn text_column(title: &str, expand: bool, read: fn(&Row) -> String) -> gtk4::ColumnViewColumn {
@@ -346,7 +378,7 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
     let store = gio::ListStore::new::<Row>();
     let selection = gtk4::MultiSelection::new(Some(store.clone()));
     let view = gtk4::ColumnView::new(Some(selection.clone()));
-    view.append_column(&text_column("Name", true, |row| row.imp().name.borrow().clone()));
+    view.append_column(&name_column());
     view.append_column(&text_column("Size", false, |row| row.imp().size.borrow().clone()));
     view.append_column(&text_column("Modified", false, |row| row.imp().modified.borrow().clone()));
     view.set_enable_rubberband(true);

@@ -11,6 +11,7 @@ pub mod dictation;
 pub mod display;
 pub mod drives;
 pub mod error;
+pub mod file_icons;
 pub mod file_manager_service;
 pub mod icon_theme;
 pub mod inspect;
