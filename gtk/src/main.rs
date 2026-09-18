@@ -5,7 +5,7 @@
 //! surfaces are ported, this build cannot delete anything.
 
 use gtk4::{gio, glib, prelude::*, subclass::prelude::*};
-use omafil_core::{drives, file_icons, file_manager_service, icon_theme, launch, listing, omarchy, operations, paths, store, watcher};
+use omafil_core::{drives, file_icons, file_manager_service, icon_theme, launch, listing, omarchy, operations, paths, store, thumbnail, watcher};
 use listing::{DirectoryEntry, DirectoryEntryType, EntrySort};
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
@@ -21,6 +21,9 @@ mod row {
         pub size: RefCell<String>,
         pub modified: RefCell<String>,
         pub is_directory: Cell<bool>,
+        /// Resolved once per entry; None until asked for, Some(None) when this
+        /// file type has no thumbnail.
+        pub thumbnail: RefCell<Option<Option<String>>>,
     }
 
     #[glib::object_subclass]
@@ -261,11 +264,47 @@ fn build_sidebar(state: &Rc<App>) -> gtk4::Widget {
         .hscrollbar_policy(gtk4::PolicyType::Never).child(&column).build().upcast()
 }
 
+const ROW_ICON_PX: i32 = 24;
+
+/// Thumbnails come from `core::thumbnail`, which reads the shared freedesktop
+/// cache and otherwise runs an installed thumbnailer. Both can block, so the
+/// lookup runs off the main thread and the result is dropped if the row has
+/// been recycled onto a different file in the meantime.
+fn request_thumbnail(image: &gtk4::Image, row: &Row) {
+    if row.is_directory() {
+        return;
+    }
+    let path = row.path();
+    if let Some(known) = row.imp().thumbnail.borrow().as_ref() {
+        if let Some(found) = known {
+            image.set_from_file(Some(found));
+        }
+        return;
+    }
+
+    let image = image.clone();
+    let row = row.clone();
+    let requested = path.clone();
+    glib::spawn_future_local(async move {
+        let found = gio::spawn_blocking(move || thumbnail::thumbnail(path).ok()).await.ok().flatten();
+        row.imp().thumbnail.replace(Some(found.clone()));
+        // The factory recycles widgets; only paint if this image still shows
+        // the file the lookup was started for.
+        if image.widget_name() == requested {
+            if let Some(found) = found {
+                image.set_from_file(Some(&found));
+            }
+        }
+    });
+}
+
 fn name_column() -> gtk4::ColumnViewColumn {
     let factory = gtk4::SignalListItemFactory::new();
     factory.connect_setup(|_, item| {
         let cell = gtk4::Box::builder().orientation(gtk4::Orientation::Horizontal).spacing(8).css_classes(["cell"]).build();
-        cell.append(&gtk4::Image::new());
+        let image = gtk4::Image::new();
+        image.set_pixel_size(ROW_ICON_PX);
+        cell.append(&image);
         cell.append(&gtk4::Label::builder().xalign(0.0).ellipsize(gtk4::pango::EllipsizeMode::Middle).build());
         item.downcast_ref::<gtk4::ListItem>().expect("list item").set_child(Some(&cell));
     });
@@ -276,7 +315,9 @@ fn name_column() -> gtk4::ColumnViewColumn {
         let Some(image) = cell.first_child().and_downcast::<gtk4::Image>() else { return };
         let Some(label) = image.next_sibling().and_downcast::<gtk4::Label>() else { return };
         image.set_icon_name(Some(&entry.imp().icon.borrow()));
+        image.set_widget_name(&entry.path());
         label.set_text(&entry.imp().name.borrow());
+        request_thumbnail(&image, &entry);
     });
     let column = gtk4::ColumnViewColumn::new(Some("Name"), Some(factory));
     column.set_expand(true);
@@ -493,7 +534,7 @@ use std::path::Path;
 
 fn main() -> glib::ExitCode {
     let requested = std::env::args().nth(1);
-    let application = gtk4::Application::builder().application_id("dev.omafil.SpikeGtk4").build();
+    let application = gtk4::Application::builder().application_id("dev.omafil.Gtk").build();
 
     // FileManager1 on its own thread, exactly as the Tauri build starts it. The
     // name is requested with DoNotQueue, so an existing file manager keeps it.

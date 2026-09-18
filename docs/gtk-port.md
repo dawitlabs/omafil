@@ -31,7 +31,7 @@ build reaches parity.
 | Drives | done | **partial** | Listed with free space. No mount, unmount, eject or format. |
 | FileManager1 | done | **done** | Served on a background thread, name requested with DoNotQueue. |
 | Icons | done | **done** | Names from `core::file_icons`, resolved by GTK against the Omarchy icon theme. |
-| Thumbnails | done | not started | `core::thumbnail` is unused by this build. |
+| Thumbnails | done | **done** | Shared freedesktop cache then an installed thumbnailer, resolved off the main thread. List only; no grid view yet. |
 | Tabs | done | not started | |
 | Split panes | done | not started | |
 | Search | done | not started | Filename and indexed. |
