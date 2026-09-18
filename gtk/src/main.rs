@@ -99,6 +99,7 @@ fn apply_theme() {
          .heading {{ font-size: 0.85em; opacity: 0.6; padding: 0 6px; }}
          .shortcut {{ padding: 4px 6px; background: transparent; border: 0; color: {foreground}; }}
          .shortcut--active {{ background: {accent}; }}
+         .pane--focused {{ border-left: 2px solid {accent}; }}
          .tab {{ padding: 3px 4px 3px 10px; border-radius: 6px; }}
          .tab--active {{ background: {accent}; }}
          .crumb {{ padding: 2px 6px; background: transparent; border: 0; color: {foreground}; }}
@@ -133,6 +134,11 @@ struct App {
     shortcuts: RefCell<Vec<(PathBuf, gtk4::Button)>>,
     panes: RefCell<Vec<Rc<Pane>>>,
     active: Cell<usize>,
+    /// The second pane when the view is split. It has no tab: tabs belong to
+    /// the primary side.
+    secondary: RefCell<Option<Rc<Pane>>>,
+    focus_secondary: Cell<bool>,
+    paned: gtk4::Paned,
     stack: gtk4::Stack,
     tabs: gtk4::Box,
     crumbs: gtk4::Box,
@@ -142,8 +148,24 @@ struct App {
 
 impl App {
     fn pane(&self) -> Rc<Pane> {
+        if self.focus_secondary.get() {
+            if let Some(secondary) = self.secondary.borrow().as_ref() {
+                return Rc::clone(secondary);
+            }
+        }
         let panes = self.panes.borrow();
         Rc::clone(&panes[self.active.get().min(panes.len() - 1)])
+    }
+
+    /// Marks which side the header and the sidebar are speaking for.
+    fn show_focus(&self) {
+        let secondary_focused = self.focus_secondary.get();
+        if let Some(secondary) = self.secondary.borrow().as_ref() {
+            secondary.page.set_css_classes(if secondary_focused { &["pane--focused"] } else { &[] });
+            self.stack.set_css_classes(if secondary_focused { &[] } else { &["pane--focused"] });
+        } else {
+            self.stack.set_css_classes(&[]);
+        }
     }
 
     fn selected_rows(&self) -> Vec<Row> {
@@ -279,6 +301,9 @@ fn add_tab(state: &Rc<App>, folder: PathBuf) {
 fn activate_tab(state: &Rc<App>, index: usize) {
     let Some(pane) = state.panes.borrow().get(index).map(Rc::clone) else { return };
     state.active.set(index);
+    // Choosing a tab is choosing the primary side.
+    state.focus_secondary.set(false);
+    state.show_focus();
     state.stack.set_visible_child(&pane.page);
     for (position, other) in state.panes.borrow().iter().enumerate() {
         if position == index {
@@ -302,6 +327,40 @@ fn close_tab(state: &Rc<App>, index: usize) {
     state.stack.remove(&pane.page);
     state.tabs.remove(&pane.tab);
     activate_tab(state, index.min(state.panes.borrow().len() - 1));
+}
+
+/// A second pane beside the tabs, starting where the focused one is. Closing it
+/// returns focus to the tabs so the header always describes a live pane.
+fn toggle_split(state: &Rc<App>) {
+    let existing = state.secondary.borrow_mut().take();
+    if let Some(secondary) = existing {
+        state.paned.set_end_child(None::<&gtk4::Widget>);
+        drop(secondary);
+        state.focus_secondary.set(false);
+        state.show_focus();
+        let here = state.pane().folder.borrow().clone();
+        navigate(state, here, false);
+        return;
+    }
+
+    let here = state.pane().folder.borrow().clone();
+    let secondary = new_pane(state, here.clone());
+    state.paned.set_end_child(Some(&secondary.page));
+    state.secondary.replace(Some(secondary));
+    state.focus_secondary.set(true);
+    state.show_focus();
+    navigate(state, here, false);
+}
+
+/// F6 moves between the panes; with no split there is nowhere to go.
+fn switch_pane(state: &Rc<App>) {
+    if state.secondary.borrow().is_none() {
+        return;
+    }
+    state.focus_secondary.set(!state.focus_secondary.get());
+    state.show_focus();
+    let here = state.pane().folder.borrow().clone();
+    navigate(state, here, false);
 }
 
 fn shortcut(state: &Rc<App>, label: &str, icon: &str, target: PathBuf) -> gtk4::Button {
@@ -428,7 +487,12 @@ fn name_column() -> gtk4::ColumnViewColumn {
         let image = gtk4::Image::new();
         image.set_pixel_size(ROW_ICON_PX);
         cell.append(&image);
-        cell.append(&gtk4::Label::builder().xalign(0.0).ellipsize(gtk4::pango::EllipsizeMode::Middle).build());
+        cell.append(
+            &gtk4::Label::builder().xalign(0.0)
+                .ellipsize(gtk4::pango::EllipsizeMode::Middle)
+                .width_chars(16)
+                .build(),
+        );
         item.downcast_ref::<gtk4::ListItem>().expect("list item").set_child(Some(&cell));
     });
     factory.connect_bind(|_, item| {
@@ -543,6 +607,19 @@ fn install_actions(app: &Rc<App>, window: &gtk4::ApplicationWindow) {
     });
     actions.add_action(&open_tab);
 
+    // The Svelte build reaches the split only through its toolbar button. A
+    // mouse-only toggle is not reachable by keyboard, so this build gives it a
+    // key as well.
+    let split = gio::SimpleAction::new("toggle-split", None);
+    let splitting = Rc::clone(app);
+    split.connect_activate(move |_, _| toggle_split(&splitting));
+    actions.add_action(&split);
+
+    let switch = gio::SimpleAction::new("switch-pane", None);
+    let switching = Rc::clone(app);
+    switch.connect_activate(move |_, _| switch_pane(&switching));
+    actions.add_action(&switch);
+
     let shut_tab = gio::SimpleAction::new("close-tab", None);
     let closing = Rc::clone(app);
     shut_tab.connect_activate(move |_, _| {
@@ -555,6 +632,8 @@ fn install_actions(app: &Rc<App>, window: &gtk4::ApplicationWindow) {
     if let Some(application) = window.application() {
         application.set_accels_for_action("row.new-tab", &["<Control>t"]);
         application.set_accels_for_action("row.close-tab", &["<Control>w"]);
+        application.set_accels_for_action("row.switch-pane", &["F6"]);
+        application.set_accels_for_action("row.toggle-split", &["F3"]);
     }
 }
 
@@ -584,12 +663,16 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
     let up = gtk4::Button::builder().label("Up").build();
     let tabs = gtk4::Box::builder().orientation(gtk4::Orientation::Horizontal).spacing(4).build();
     let stack = gtk4::Stack::new();
+    let paned = gtk4::Paned::builder().orientation(gtk4::Orientation::Horizontal).start_child(&stack).build();
 
     let state = Rc::new(App {
         _watchers: RefCell::new(Vec::new()),
         shortcuts: RefCell::new(Vec::new()),
         panes: RefCell::new(Vec::new()),
         active: Cell::new(0),
+        secondary: RefCell::new(None),
+        focus_secondary: Cell::new(false),
+        paned: paned.clone(),
         stack: stack.clone(),
         tabs: tabs.clone(),
         crumbs: crumbs.clone(),
@@ -635,8 +718,14 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
     let tab_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
     tab_bar.set_margin_top(6);
     tab_bar.set_margin_start(6);
+    let splitting = Rc::clone(&state);
+    let split_button = gtk4::ToggleButton::builder().icon_name("view-dual-symbolic").has_frame(false)
+        .tooltip_text("Split into two panes (F6 switches panes)").build();
+    split_button.connect_toggled(move |_| toggle_split(&splitting));
+
     tab_bar.append(&tabs);
     tab_bar.append(&new_tab);
+    tab_bar.append(&split_button);
 
     let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
     header.set_margin_start(6);
@@ -648,7 +737,8 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
     let layout = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
     layout.append(&tab_bar);
     layout.append(&header);
-    layout.append(&stack);
+    layout.append(&paned);
+    paned.set_vexpand(true);
     stack.set_vexpand(true);
     status.set_margin_start(8);
     status.set_margin_bottom(6);

@@ -33,7 +33,7 @@ build reaches parity.
 | Icons | done | **done** | Names from `core::file_icons`, resolved by GTK against the Omarchy icon theme. |
 | Thumbnails | done | **done** | Shared freedesktop cache then an installed thumbnailer, resolved off the main thread. List only; no grid view yet. |
 | Tabs | done | **done** | Per-tab folder, history and list. Ctrl+T, Ctrl+W, click to switch, close button. No reordering, no restore, no middle-click close. |
-| Split panes | done | not started | |
+| Split panes | done | **done** | Second pane beside the tabs, F6 switches, F3 toggles, focused side marked. No drag between panes yet. |
 | Search | done | not started | Filename and indexed. |
 | File inspector | done | not started | Properties, permissions. |
 | Operations UI | done | not started | Copy, move, ZIP with progress and cancellation. |
