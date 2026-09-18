@@ -9,6 +9,11 @@
 - Optional LocalSearch document-content search with scoped, parameterized queries,
   hidden-file handling, result filters, Show in folder and filename fallback.
 - Keyboard range selection, selection toggling and roving tab focus/navigation.
+- Thumbnails for file types with no preview of their own, reusing the shared
+  freedesktop cache other file managers already filled and falling back to an
+  installed system thumbnailer. Types without one keep their icon.
+- Dictate into the search box through voxtype, with the listening state shown on
+  the control. The control is absent when voxtype is not installed.
 
 - Paste copied PNG, JPEG and WebP images into the current folder, with unique
   filenames and Undo. Click a selected item's name again to rename it; double

@@ -21,7 +21,11 @@ optdepends=('omarchy: theme and editor integration'
             'gvfs-gphoto2: cameras and compatible devices'
             'gvfs-afc: compatible Apple device access'
             'localsearch: indexed document content and metadata search'
-            'tinysparql: indexed search service bindings')
+            'tinysparql: indexed search service bindings'
+            'ffmpegthumbnailer: video and audio thumbnails'
+            'libgsf: office document thumbnails'
+            'glycin: HEIF, JPEG XL and SVG thumbnails'
+            'voxtype-bin: dictation in the search box')
 provides=('omafil')
 # !debug: the release profile already sets strip = true, so makepkg's debug
 # symbols are generated and then discarded.

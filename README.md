@@ -13,6 +13,7 @@ yay -S omafil-bin
 - **Follows the active theme live.** Every colour comes from the current theme's `colors.toml`, and `omarchy theme set` retints the app on the spot. Off Omarchy it falls back to its own light and dark palettes.
 - **Terminal and editor here.** F4 opens a terminal in the current folder through `xdg-terminal-exec`; Edit opens a file with `omarchy launch editor`.
 - **Vim keys.** Optional in Settings: `j`/`k` move, `h` goes up, `l` opens, `gg`/`G` jump, `/` searches.
+- **Dictation in search.** With Omarchy's `voxtype` installed, the microphone in the search box starts and stops it and shows when it is listening; `F9` and `SUPER+CTRL+X` work too. The control is hidden when voxtype is not installed.
 - **Icon theme too.** File and folder icons come from the theme named in `icons.theme`, following its inheritance chain.
 - **Desktop opening.** Paths and local `file://` URIs open in tabs, including escaped spaces and Unicode. Subsequent launches reuse the running window. `--select` reveals files in their parent folder and `--properties` opens an item's details.
 - **Desktop notifications.** A copy or ZIP that finishes while another window has focus reports through `notify-send`.
@@ -37,6 +38,11 @@ yay -S omafil-bin
 - Rename many items at once with find/replace and a `{name}{ext}{n}` pattern, previewed before anything changes.
 - Removable drives mount, unmount and eject through `udisksctl`; plugging in a stick refreshes the list.
 - Drag and drop inside the app and from other apps; image, text and PDF previews (`pdftoppm`, cached under `~/.cache/omafil`).
+- Grid thumbnails for video, audio, office documents and other types with no
+  preview of their own. Anything another file manager already rendered is reused
+  from the shared cache under `~/.cache/thumbnails`; the rest go through an
+  installed system thumbnailer such as `ffmpegthumbnailer`. Files with no
+  thumbnailer keep their icon.
 - Panics and unhandled frontend errors land as JSON lines in `~/.local/state/omafil/errors.log`.
 
 ## Undo

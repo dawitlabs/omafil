@@ -18,7 +18,11 @@ optdepends=('omarchy: theme and editor integration'
             'gvfs-gphoto2: cameras and compatible devices'
             'gvfs-afc: compatible Apple device access'
             'localsearch: indexed document content and metadata search'
-            'tinysparql: indexed search service bindings')
+            'tinysparql: indexed search service bindings'
+            'ffmpegthumbnailer: video and audio thumbnails'
+            'libgsf: office document thumbnails'
+            'glycin: HEIF, JPEG XL and SVG thumbnails'
+            'voxtype-bin: dictation in the search box')
 provides=('omafil')
 # The released binary is already stripped, so makepkg would only generate a
 # debug package out of nothing and strip a stripped file.
