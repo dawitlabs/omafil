@@ -25,3 +25,6 @@ dist-ssr
 
 # screenshot scratch
 output/
+
+# vite dependency cache
+.vite/
