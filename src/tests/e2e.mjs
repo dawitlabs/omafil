@@ -555,6 +555,26 @@ await scenario('network copies in both directions through provider', async ({ pa
   check('unsupported move is explained', (await page.getByRole('alert').innerText()).includes('Moving to a remote location is not supported'), true)
 })
 
+await scenario('dictation starts from the search box', async ({ page }) => {
+  const mic = page.getByRole('button', { name: 'Dictate into search', exact: true })
+  await mic.waitFor()
+  check('the control starts idle', await mic.getAttribute('aria-pressed'), 'false')
+
+  await mic.click()
+  const live = page.getByRole('button', { name: 'Stop dictation', exact: true })
+  await live.waitFor()
+  check('listening is exposed as a pressed state', await live.getAttribute('aria-pressed'), 'true')
+  check('dictated text would land in the search box', await page.evaluate(() => document.activeElement?.getAttribute('type')), 'search')
+  check('listening is announced', (await page.locator('[role="status"]').allInnerTexts()).some((t) => t.includes('Dictation recording')), true)
+
+  await live.click()
+  await page.getByRole('button', { name: 'Dictate into search', exact: true }).waitFor()
+  check('stopping returns the control to idle', await mic.getAttribute('aria-pressed'), 'false')
+
+  await page.goto(`${URL}?noDictation=1`)
+  check('no voxtype means no control at all', await page.getByRole('button', { name: 'Dictate into search', exact: true }).count(), 0)
+})
+
 await scenario('the connect form offers only installed protocols', async ({ page }) => {
   await page.goto(`${URL}?noDevices=1`)
   await page.getByRole('button', { name: 'Network & Devices', exact: true }).click()

@@ -127,9 +127,7 @@ fn installed(thumbnailer: &Thumbnailer) -> bool {
     if program.contains('/') {
         return Path::new(program).is_file();
     }
-    std::env::var("PATH").is_ok_and(|paths| {
-        paths.split(':').any(|dir| Path::new(dir).join(program).is_file())
-    })
+    crate::launch::on_path(program)
 }
 
 fn find_thumbnailer(mime: &str) -> Option<Thumbnailer> {

@@ -18,6 +18,7 @@
       const searchCalls = []
       window.__searchCalls = () => searchCalls
       const servicePending = new Map()
+      let dictationState = 'idle'
       window.__serviceCalls = () => serviceCalls
       window.__setClipboard = (value) => { clipboard = value }
       window.__clipboardCalls = () => clipboardCalls
@@ -74,6 +75,8 @@
           raw[p] = raw[p].map((r) => (r[0] === old ? [a.name, r[1], r[2], r[3]] : r)); return `${p}/${a.name}` },
         describe_path: (a) => { const p = a.path.slice(0, a.path.lastIndexOf('/')), n = a.path.slice(p.length + 1)
           const r = (raw[p] ?? []).find((x) => x[0] === n); if (!r) throw { message: 'gone' }; return mk(p, r) },
+        dictation_status: () => ({ isAvailable: !params.has('noDictation'), state: dictationState }),
+        toggle_dictation: () => { dictationState = dictationState === 'idle' ? 'recording' : 'idle'; return null },
         preview_asset: (a) => a.path,
         search_files: (a) => { searchCalls.push(a); return { entries: [], truncated: false, skipped: params.has('partialSearch') ? 1 : 0 } },
         list_subdirectories: (a) => (raw[a.path] ?? []).filter((r) => r[1] === 'd' && (a.showHidden || !r[0].startsWith('.'))).map((r) => ({ name: r[0], path: `${a.path}/${r[0]}` })),

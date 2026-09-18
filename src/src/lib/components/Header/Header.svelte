@@ -7,15 +7,72 @@
   import DismissIcon from '@fluentui/svg-icons/icons/dismiss_20_regular.svg?no-inline'
   import FolderIcon from '@fluentui/svg-icons/icons/folder_20_regular.svg?no-inline'
   import HomeIcon from '@fluentui/svg-icons/icons/home_20_regular.svg?no-inline'
+  import MicIcon from '@fluentui/svg-icons/icons/mic_20_regular.svg?no-inline'
   import SearchIcon from '@fluentui/svg-icons/icons/search_20_regular.svg?no-inline'
   import SettingsIcon from '@fluentui/svg-icons/icons/settings_20_regular.svg?no-inline'
   import SplitIcon from '@fluentui/svg-icons/icons/layout_column_two_20_regular.svg?no-inline'
+  import { onDestroy } from 'svelte'
   import { getCurrentWindow } from '@tauri-apps/api/window'
+  import { dictationStatus, toggleDictation, type DictationStatus } from '../../dictation'
   import { tabs } from '../../tabs.svelte'
   import { appState } from '../../appState.svelte'
   import { fileOperations } from '../../fileOperations.svelte'
 
   const SEARCH_DELAY_MS = 300
+  const DICTATION_POLL_MS = 400
+  // The daemon writes "recording" a moment after it is asked to, so polling
+  // holds on past that before an idle reading is allowed to end it.
+  const DICTATION_START_GRACE_MS = 1500
+  // voxtype stops itself at its own recording limit; this only ends the polling
+  // if the daemon dies mid-phrase and never writes "idle" back.
+  const DICTATION_POLL_LIMIT = 90_000
+
+  let dictation = $state<DictationStatus>({ isAvailable: false, state: 'idle' })
+  let dictationTimer: ReturnType<typeof setInterval> | null = null
+
+  const isListening = $derived(dictation.state !== 'idle')
+
+  void dictationStatus().then((status) => { dictation = status }).catch(() => undefined)
+
+  function stopWatchingDictation() {
+    if (dictationTimer !== null) clearInterval(dictationTimer)
+    dictationTimer = null
+  }
+
+  onDestroy(stopWatchingDictation)
+
+  function watchDictation() {
+    stopWatchingDictation()
+    const started = Date.now()
+
+    const poll = async () => {
+      try {
+        dictation = await dictationStatus()
+      } catch {
+        dictation = { ...dictation, state: 'idle' }
+      }
+      const settled = dictation.state === 'idle' && Date.now() > started + DICTATION_START_GRACE_MS
+      if (settled || Date.now() > started + DICTATION_POLL_LIMIT) stopWatchingDictation()
+    }
+
+    void poll()
+    dictationTimer = setInterval(poll, DICTATION_POLL_MS)
+  }
+
+  async function handleDictate(event: MouseEvent) {
+    // The click sits inside the search label, and dictated text has to land in
+    // the input rather than on the button that started it.
+    event.preventDefault()
+    searchInput?.focus()
+    try {
+      await toggleDictation()
+      watchDictation()
+    } catch {
+      // Only a removed voxtype can fail here, so retire the control.
+      stopWatchingDictation()
+      dictation = { isAvailable: false, state: 'idle' }
+    }
+  }
 
   const appWindow = getCurrentWindow()
 
@@ -229,6 +286,20 @@
           }
         }}
       />
+      {#if dictation.isAvailable}
+        <button
+          type="button"
+          class="app-header__dictate"
+          class:app-header__dictate--live={isListening}
+          aria-pressed={isListening}
+          aria-label={isListening ? 'Stop dictation' : 'Dictate into search'}
+          title={isListening ? 'Listening — click to stop (F9 also works)' : 'Dictate into search (F9)'}
+          onclick={handleDictate}
+        >
+          <span class="masked-icon app-header__icon" style="--icon: url({MicIcon})" aria-hidden="true"></span>
+        </button>
+        <span class="app-header__dictate-status" role="status" aria-live="polite">{isListening ? `Dictation ${dictation.state}` : ''}</span>
+      {/if}
     </label>
   </div>
 </header>

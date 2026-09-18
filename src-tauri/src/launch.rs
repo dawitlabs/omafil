@@ -7,6 +7,13 @@ use std::{
     thread,
 };
 
+/// True when a bare program name resolves on PATH.
+pub(crate) fn on_path(program: &str) -> bool {
+    std::env::var_os("PATH").is_some_and(|paths| {
+        std::env::split_paths(&paths).any(|dir| dir.join(program).is_file())
+    })
+}
+
 /// Runs the first candidate that exists on PATH. A child that fails after
 /// starting reports through its own UI, so only a missing program moves on.
 pub(crate) fn spawn_first(candidates: &[Vec<String>], cwd: &Path, failure: &str) -> Result<(), DirectoryError> {

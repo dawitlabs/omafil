@@ -309,6 +309,55 @@
   color: var(--text-muted);
 }
 
+.app-header__dictate {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.app-header__dictate:hover,
+.app-header__dictate:focus-visible {
+  color: var(--text-primary);
+}
+
+.app-header__dictate--live,
+.app-header__dictate--live:hover {
+  color: var(--text-accent);
+}
+
+.app-header__dictate--live .masked-icon {
+  color: inherit;
+  animation: app-header-listening 1.4s ease-in-out infinite;
+}
+
+@keyframes app-header-listening {
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-header__dictate--live .masked-icon {
+    animation: none;
+  }
+}
+
+/* Announces listening state to a screen reader without taking layout space. */
+.app-header__dictate-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .app-header__icon {
   width: 18px;
   height: 18px;

@@ -5,6 +5,7 @@ mod display;
 mod drives;
 mod diagnostics;
 mod desktop_requests;
+mod dictation;
 mod desktop_integration;
 mod file_manager_service;
 mod error;
@@ -196,6 +197,16 @@ async fn pdf_preview(path: String) -> Result<String, DirectoryError> {
     tauri::async_runtime::spawn_blocking(move || preview::pdf_preview(path))
         .await
         .map_err(|_| DirectoryError::read_failed())?
+}
+
+#[tauri::command]
+fn dictation_status() -> dictation::DictationStatus {
+    dictation::dictation_status()
+}
+
+#[tauri::command]
+fn toggle_dictation() -> Result<(), DirectoryError> {
+    dictation::toggle_dictation()
 }
 
 #[tauri::command]
@@ -571,6 +582,8 @@ pub fn run() {
             set_default_opener,
             pdf_preview,
             thumbnail,
+            dictation_status,
+            toggle_dictation,
             preview_asset,
             report_client_error,
             mount_drive,
