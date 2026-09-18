@@ -32,7 +32,7 @@ build reaches parity.
 | FileManager1 | done | **done** | Served on a background thread, name requested with DoNotQueue. |
 | Icons | done | **done** | Names from `core::file_icons`, resolved by GTK against the Omarchy icon theme. |
 | Thumbnails | done | **done** | Shared freedesktop cache then an installed thumbnailer, resolved off the main thread. List only; no grid view yet. |
-| Tabs | done | not started | |
+| Tabs | done | **done** | Per-tab folder, history and list. Ctrl+T, Ctrl+W, click to switch, close button. No reordering, no restore, no middle-click close. |
 | Split panes | done | not started | |
 | Search | done | not started | Filename and indexed. |
 | File inspector | done | not started | Properties, permissions. |

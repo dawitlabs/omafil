@@ -7,7 +7,7 @@
 use gtk4::{gio, glib, prelude::*, subclass::prelude::*};
 use omafil_core::{drives, file_icons, file_manager_service, icon_theme, launch, listing, omarchy, operations, paths, store, thumbnail, watcher};
 use listing::{DirectoryEntry, DirectoryEntryType, EntrySort};
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use std::{cell::{Cell, RefCell}, path::PathBuf, rc::Rc};
 
 mod row {
     use super::*;
@@ -99,6 +99,8 @@ fn apply_theme() {
          .heading {{ font-size: 0.85em; opacity: 0.6; padding: 0 6px; }}
          .shortcut {{ padding: 4px 6px; background: transparent; border: 0; color: {foreground}; }}
          .shortcut--active {{ background: {accent}; }}
+         .tab {{ padding: 3px 4px 3px 10px; border-radius: 6px; }}
+         .tab--active {{ background: {accent}; }}
          .crumb {{ padding: 2px 6px; background: transparent; border: 0; color: {foreground}; }}
          .cell {{ padding: 4px 8px; }}",
         background = pick("background", "#101010"),
@@ -112,31 +114,50 @@ fn apply_theme() {
     }
 }
 
+/// One tab: its own folder, history and list. The header is shared and always
+/// reflects whichever pane is showing.
+struct Pane {
+    folder: RefCell<PathBuf>,
+    history: RefCell<Vec<PathBuf>>,
+    store: gio::ListStore,
+    selection: gtk4::MultiSelection,
+    tab: gtk4::Box,
+    label: gtk4::Label,
+    page: gtk4::Widget,
+}
+
 struct App {
     _watchers: RefCell<Vec<Box<dyn std::any::Any>>>,
     /// Sidebar entries by the path they open, so the current folder can be
     /// marked without rebuilding the list.
     shortcuts: RefCell<Vec<(PathBuf, gtk4::Button)>>,
-    folder: RefCell<PathBuf>,
-    history: RefCell<Vec<PathBuf>>,
-    store: gio::ListStore,
-    selection: gtk4::MultiSelection,
+    panes: RefCell<Vec<Rc<Pane>>>,
+    active: Cell<usize>,
+    stack: gtk4::Stack,
+    tabs: gtk4::Box,
     crumbs: gtk4::Box,
     status: gtk4::Label,
     back: gtk4::Button,
 }
 
 impl App {
+    fn pane(&self) -> Rc<Pane> {
+        let panes = self.panes.borrow();
+        Rc::clone(&panes[self.active.get().min(panes.len() - 1)])
+    }
+
     fn selected_rows(&self) -> Vec<Row> {
-        let bitset = self.selection.selection();
+        let selection = &self.pane().selection;
+        let bitset = selection.selection();
         (0..bitset.size())
-            .filter_map(|index| self.selection.item(bitset.nth(index as u32)))
+            .filter_map(|index| selection.item(bitset.nth(index as u32)))
             .filter_map(|item| item.downcast::<Row>().ok())
             .collect()
     }
 }
 
 fn navigate(app: &Rc<App>, target: PathBuf, remember: bool) {
+    let pane = app.pane();
     let listed = listing::read_directory_listing_revealing(
         target.to_string_lossy().into_owned(),
         EntrySort::Name, false, false, 0, listing::MAX_PAGE_SIZE, "", &[],
@@ -147,13 +168,14 @@ fn navigate(app: &Rc<App>, target: PathBuf, remember: bool) {
     };
 
     if remember {
-        app.history.borrow_mut().push(app.folder.borrow().clone());
+        pane.history.borrow_mut().push(pane.folder.borrow().clone());
     }
-    app.folder.replace(target.clone());
-    app.store.remove_all();
+    pane.folder.replace(target.clone());
+    pane.store.remove_all();
     for entry in &listing.entries {
-        app.store.append(&Row::new(entry));
+        pane.store.append(&Row::new(entry));
     }
+    pane.label.set_text(&paths::display_name(&target));
 
     while let Some(child) = app.crumbs.first_child() {
         app.crumbs.remove(&child);
@@ -173,12 +195,113 @@ fn navigate(app: &Rc<App>, target: PathBuf, remember: bool) {
             button.remove_css_class("shortcut--active");
         }
     }
-    app.back.set_sensitive(!app.history.borrow().is_empty());
+    app.back.set_sensitive(!pane.history.borrow().is_empty());
     app.status.set_text(&format!(
         "{} items{}",
         listing.total,
         if listing.has_more { ", showing the first page" } else { "" }
     ));
+}
+
+/// Builds a tab and its page. The pane is not shown until `activate_tab`.
+fn new_pane(state: &Rc<App>, folder: PathBuf) -> Rc<Pane> {
+    let store = gio::ListStore::new::<Row>();
+    let selection = gtk4::MultiSelection::new(Some(store.clone()));
+    let view = gtk4::ColumnView::new(Some(selection.clone()));
+    view.append_column(&name_column());
+    view.append_column(&text_column("Size", false, |row| row.imp().size.borrow().clone()));
+    view.append_column(&text_column("Modified", false, |row| row.imp().modified.borrow().clone()));
+    view.set_enable_rubberband(true);
+
+    let navigating = Rc::clone(state);
+    view.connect_activate(move |view, position| {
+        let Some(row) = view.model().and_then(|model| model.item(position)).and_downcast::<Row>() else { return };
+        if row.is_directory() {
+            navigate(&navigating, PathBuf::from(row.path()), true);
+        }
+    });
+    let counting = Rc::clone(state);
+    selection.connect_selection_changed(move |selection, _, _| {
+        let chosen = selection.selection().size();
+        if chosen > 0 {
+            counting.status.set_text(&format!("{chosen} selected"));
+        }
+    });
+    attach_context_menu(state, &view);
+
+    let label = gtk4::Label::builder().label(paths::display_name(&folder)).ellipsize(gtk4::pango::EllipsizeMode::End).max_width_chars(16).build();
+    let close = gtk4::Button::builder().icon_name("window-close-symbolic").css_classes(["tab-close"]).has_frame(false).build();
+    let tab = gtk4::Box::builder().orientation(gtk4::Orientation::Horizontal).spacing(4).css_classes(["tab"]).build();
+    tab.append(&label);
+    tab.append(&close);
+
+    let pane = Rc::new(Pane {
+        folder: RefCell::new(folder),
+        history: RefCell::new(Vec::new()),
+        store,
+        selection,
+        tab: tab.clone(),
+        label,
+        page: gtk4::ScrolledWindow::builder().vexpand(true).child(&view).build().upcast(),
+    });
+
+    let switching = Rc::clone(state);
+    let switch_to = Rc::clone(&pane);
+    let press = gtk4::GestureClick::new();
+    press.connect_pressed(move |_, _, _, _| {
+        if let Some(index) = switching.panes.borrow().iter().position(|other| Rc::ptr_eq(other, &switch_to)) {
+            activate_tab(&switching, index);
+        }
+    });
+    tab.add_controller(press);
+
+    let closing = Rc::clone(state);
+    let close_this = Rc::clone(&pane);
+    close.connect_clicked(move |_| {
+        if let Some(index) = closing.panes.borrow().iter().position(|other| Rc::ptr_eq(other, &close_this)) {
+            close_tab(&closing, index);
+        }
+    });
+
+    pane
+}
+
+fn add_tab(state: &Rc<App>, folder: PathBuf) {
+    let pane = new_pane(state, folder.clone());
+    state.stack.add_child(&pane.page);
+    state.tabs.append(&pane.tab);
+    state.panes.borrow_mut().push(Rc::clone(&pane));
+    let index = state.panes.borrow().len() - 1;
+    activate_tab(state, index);
+    navigate(state, folder, false);
+}
+
+fn activate_tab(state: &Rc<App>, index: usize) {
+    let Some(pane) = state.panes.borrow().get(index).map(Rc::clone) else { return };
+    state.active.set(index);
+    state.stack.set_visible_child(&pane.page);
+    for (position, other) in state.panes.borrow().iter().enumerate() {
+        if position == index {
+            other.tab.add_css_class("tab--active");
+        } else {
+            other.tab.remove_css_class("tab--active");
+        }
+    }
+    // The header belongs to whichever pane is showing.
+    let folder = pane.folder.borrow().clone();
+    navigate(state, folder, false);
+}
+
+/// Closing the last tab closes nothing: a window with no pane has no state to
+/// show and no way back.
+fn close_tab(state: &Rc<App>, index: usize) {
+    if state.panes.borrow().len() < 2 {
+        return;
+    }
+    let pane = state.panes.borrow_mut().remove(index);
+    state.stack.remove(&pane.page);
+    state.tabs.remove(&pane.tab);
+    activate_tab(state, index.min(state.panes.borrow().len() - 1));
 }
 
 fn shortcut(state: &Rc<App>, label: &str, icon: &str, target: PathBuf) -> gtk4::Button {
@@ -386,7 +509,7 @@ fn install_actions(app: &Rc<App>, window: &gtk4::ApplicationWindow) {
     let terminal = gio::SimpleAction::new("terminal", None);
     let state = Rc::clone(app);
     terminal.connect_activate(move |_, _| {
-        let here = state.folder.borrow().to_string_lossy().into_owned();
+        let here = state.pane().folder.borrow().to_string_lossy().into_owned();
         if let Err(error) = launch::open_terminal(&here) {
             state.status.set_text(&format!("{error:?}"));
         }
@@ -403,7 +526,7 @@ fn install_actions(app: &Rc<App>, window: &gtk4::ApplicationWindow) {
         ask_for_name(&parent, &current, move |name| {
             match operations::rename_entry(row.path(), name) {
                 Ok(_) => {
-                    let here = state.folder.borrow().clone();
+                    let here = state.pane().folder.borrow().clone();
                     navigate(&state, here, false);
                 }
                 Err(error) => state.status.set_text(&format!("{error:?}")),
@@ -412,30 +535,63 @@ fn install_actions(app: &Rc<App>, window: &gtk4::ApplicationWindow) {
     });
     actions.add_action(&rename);
 
+    let open_tab = gio::SimpleAction::new("new-tab", None);
+    let opening = Rc::clone(app);
+    open_tab.connect_activate(move |_, _| {
+        let here = opening.pane().folder.borrow().clone();
+        add_tab(&opening, here);
+    });
+    actions.add_action(&open_tab);
+
+    let shut_tab = gio::SimpleAction::new("close-tab", None);
+    let closing = Rc::clone(app);
+    shut_tab.connect_activate(move |_, _| {
+        let index = closing.active.get();
+        close_tab(&closing, index);
+    });
+    actions.add_action(&shut_tab);
+
     window.insert_action_group("row", Some(&actions));
+    if let Some(application) = window.application() {
+        application.set_accels_for_action("row.new-tab", &["<Control>t"]);
+        application.set_accels_for_action("row.close-tab", &["<Control>w"]);
+    }
+}
+
+fn attach_context_menu(state: &Rc<App>, view: &gtk4::ColumnView) {
+    let _ = state;
+    let menu = gio::Menu::new();
+    menu.append(Some("Open"), Some("row.open"));
+    menu.append(Some("Rename"), Some("row.rename"));
+    menu.append(Some("Open Terminal Here"), Some("row.terminal"));
+    let popover = gtk4::PopoverMenu::from_model(Some(&menu));
+    popover.set_has_arrow(false);
+    popover.set_parent(view);
+
+    let gesture = gtk4::GestureClick::new();
+    gesture.set_button(gtk4::gdk::BUTTON_SECONDARY);
+    gesture.connect_pressed(move |_, _, x, y| {
+        popover.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+        popover.popup();
+    });
+    view.add_controller(gesture);
 }
 
 fn build_window(app: &gtk4::Application, folder: PathBuf) {
-    let store = gio::ListStore::new::<Row>();
-    let selection = gtk4::MultiSelection::new(Some(store.clone()));
-    let view = gtk4::ColumnView::new(Some(selection.clone()));
-    view.append_column(&name_column());
-    view.append_column(&text_column("Size", false, |row| row.imp().size.borrow().clone()));
-    view.append_column(&text_column("Modified", false, |row| row.imp().modified.borrow().clone()));
-    view.set_enable_rubberband(true);
-
     let crumbs = gtk4::Box::new(gtk4::Orientation::Horizontal, 2);
     let status = gtk4::Label::builder().xalign(0.0).build();
     let back = gtk4::Button::builder().label("Back").sensitive(false).build();
     let up = gtk4::Button::builder().label("Up").build();
+    let tabs = gtk4::Box::builder().orientation(gtk4::Orientation::Horizontal).spacing(4).build();
+    let stack = gtk4::Stack::new();
 
     let state = Rc::new(App {
         _watchers: RefCell::new(Vec::new()),
         shortcuts: RefCell::new(Vec::new()),
-        folder: RefCell::new(folder.clone()),
-        history: RefCell::new(Vec::new()),
-        store,
-        selection: selection.clone(),
+        panes: RefCell::new(Vec::new()),
+        active: Cell::new(0),
+        stack: stack.clone(),
+        tabs: tabs.clone(),
         crumbs: crumbs.clone(),
         status: status.clone(),
         back: back.clone(),
@@ -443,52 +599,25 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
 
     let navigating = Rc::clone(&state);
     back.connect_clicked(move |_| {
-        let previous = navigating.history.borrow_mut().pop();
+        let previous = navigating.pane().history.borrow_mut().pop();
         if let Some(previous) = previous {
             navigate(&navigating, previous, false);
         }
     });
     let navigating = Rc::clone(&state);
     up.connect_clicked(move |_| {
-        let parent = navigating.folder.borrow().parent().map(Path::to_path_buf);
+        let parent = navigating.pane().folder.borrow().parent().map(Path::to_path_buf);
         if let Some(parent) = parent {
             navigate(&navigating, parent, true);
         }
     });
 
-    // Enter and double click both land here.
-    let navigating = Rc::clone(&state);
-    view.connect_activate(move |view, position| {
-        let Some(row) = view.model().and_then(|model| model.item(position)).and_downcast::<Row>() else { return };
-        if row.is_directory() {
-            navigate(&navigating, PathBuf::from(row.path()), true);
-        }
+    let opening = Rc::clone(&state);
+    let new_tab = gtk4::Button::builder().icon_name("list-add-symbolic").has_frame(false).tooltip_text("New tab (Ctrl+T)").build();
+    new_tab.connect_clicked(move |_| {
+        let here = opening.pane().folder.borrow().clone();
+        add_tab(&opening, here);
     });
-
-    let counting = Rc::clone(&state);
-    selection.connect_selection_changed(move |selection, _, _| {
-        let chosen = selection.selection().size();
-        if chosen > 0 {
-            counting.status.set_text(&format!("{chosen} selected"));
-        }
-    });
-
-    let menu = gio::Menu::new();
-    menu.append(Some("Open"), Some("row.open"));
-    menu.append(Some("Rename"), Some("row.rename"));
-    menu.append(Some("Open Terminal Here"), Some("row.terminal"));
-    let popover = gtk4::PopoverMenu::from_model(Some(&menu));
-    popover.set_has_arrow(false);
-    popover.set_parent(&view);
-
-    let gesture = gtk4::GestureClick::new();
-    gesture.set_button(gtk4::gdk::BUTTON_SECONDARY);
-    let showing = popover.clone();
-    gesture.connect_pressed(move |_, _, x, y| {
-        showing.set_pointing_to(Some(&gtk4::gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
-        showing.popup();
-    });
-    view.add_controller(gesture);
 
     let sidebar = build_sidebar(&state);
 
@@ -503,8 +632,13 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
         }
     }
 
+    let tab_bar = gtk4::Box::new(gtk4::Orientation::Horizontal, 4);
+    tab_bar.set_margin_top(6);
+    tab_bar.set_margin_start(6);
+    tab_bar.append(&tabs);
+    tab_bar.append(&new_tab);
+
     let header = gtk4::Box::new(gtk4::Orientation::Horizontal, 6);
-    header.set_margin_top(6);
     header.set_margin_start(6);
     header.set_margin_end(6);
     header.append(&back);
@@ -512,8 +646,10 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
     header.append(&crumbs);
 
     let layout = gtk4::Box::new(gtk4::Orientation::Vertical, 6);
+    layout.append(&tab_bar);
     layout.append(&header);
-    layout.append(&gtk4::ScrolledWindow::builder().vexpand(true).child(&view).build());
+    layout.append(&stack);
+    stack.set_vexpand(true);
     status.set_margin_start(8);
     status.set_margin_bottom(6);
     layout.append(&status);
@@ -526,7 +662,7 @@ fn build_window(app: &gtk4::Application, folder: PathBuf) {
     let window = gtk4::ApplicationWindow::builder()
         .application(app).title("omafil").default_width(1200).default_height(840).child(&split).build();
     install_actions(&state, &window);
-    navigate(&state, folder, false);
+    add_tab(&state, folder);
     window.present();
 }
 
